@@ -202,7 +202,7 @@ dist/
 Create `.env.example`:
 
 ```dotenv
-OPENAI_API_KEY=replace-with-a-key-from-the-secure-setup-flow
+OPENAI_API_KEY=replace-with-your-openai-api-key
 ZORDON_MODEL=gpt-5.6-terra
 ZORDON_REQUEST_TIMEOUT_SECONDS=60
 ```
@@ -250,7 +250,12 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     api_key = environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise ConfigurationError(
-            "OPENAI_API_KEY is missing. Use Zordon's secure API-key setup first."
+            "OPENAI_API_KEY is missing. On Windows PowerShell, get a key from "
+            "https://platform.openai.com/api-keys, run "
+            "if (-not (Test-Path .env)) { Copy-Item .env.example .env }, then "
+            "open .env in a text editor and "
+            "replace the placeholder with the key. Paste the key only into the "
+            "file to keep it out of PowerShell command history."
         )
 
     model = environ.get("ZORDON_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL
@@ -289,7 +294,7 @@ Run:
 python -m pytest tests/test_config.py -q
 ```
 
-Expected: `7 passed`.
+Expected: `8 passed`.
 
 - [ ] **Step 5: Commit the configuration slice**
 
@@ -539,7 +544,7 @@ python -m pytest tests/test_agent.py -q
 python -m pytest -q
 ```
 
-Expected: `5 passed` for the focused file and `12 passed` for the current suite.
+Expected: `5 passed` for the focused file and `13 passed` for the current suite.
 
 - [ ] **Step 5: Commit the agent-core slice**
 
@@ -780,7 +785,7 @@ python -m pytest tests/test_openai_provider.py -q
 python -m pytest -q
 ```
 
-Expected: `3 passed` for the focused file and `15 passed` for the current suite.
+Expected: `11 passed` for the focused file and `24 passed` for the current suite.
 
 - [ ] **Step 5: Commit the provider slice**
 
@@ -1020,7 +1025,7 @@ until the process exits.
 - Windows
 - PowerShell
 - Python 3.12
-- OpenAI API access configured through Zordon's secure setup flow
+- An API key from the official [OpenAI API keys page](https://platform.openai.com/api-keys)
 
 ## Install
 
@@ -1031,9 +1036,21 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-The secure setup flow stores `OPENAI_API_KEY` locally. Zordon can also read
-`ZORDON_MODEL` and `ZORDON_REQUEST_TIMEOUT_SECONDS` from the environment. Never
-commit `.env`.
+Create the local settings file in PowerShell if it does not already exist,
+then open it in Notepad:
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+notepad .env
+```
+
+In the text editor, replace the placeholder after `OPENAI_API_KEY=` with the
+key from the official page, then save the file. Paste the key only into the
+text editor, never into a PowerShell command, so it does not enter PowerShell
+command history. Never commit `.env` or share its contents.
+
+Zordon can also read `ZORDON_MODEL` and
+`ZORDON_REQUEST_TIMEOUT_SECONDS` from the environment.
 
 ## Run
 
@@ -1076,7 +1093,7 @@ python -m pytest tests/test_cli.py -q
 python -m pytest -q
 ```
 
-Expected: `3 passed` for the focused file and `18 passed` for the full suite.
+Expected: `7 passed` for the focused file and `31 passed` for the full suite.
 
 - [ ] **Step 5: Verify the no-key startup path**
 
@@ -1107,7 +1124,7 @@ git commit -m "feat: add streaming text interface"
 - Consumes: the completed package and test suite.
 - Produces: fresh evidence that Tier 1 is ready for the user's live verification.
 
-- [ ] **Step 1: Recreate the supported environment cleanly**
+- [x] **Step 1: Recreate the supported environment cleanly**
 
 Run from the project root in PowerShell:
 
@@ -1122,7 +1139,7 @@ python -m pip install -e ".[dev]"
 
 Expected: installation succeeds on Python 3.12 with no dependency conflict.
 
-- [ ] **Step 2: Run the complete automated verification**
+- [x] **Step 2: Run the complete automated verification**
 
 Run:
 
@@ -1135,13 +1152,13 @@ python -c "from zordon.agent import Agent; from zordon.cli import main; print('Z
 Expected:
 
 ```text
-18 passed
+31 passed
 Zordon import OK
 ```
 
 `compileall` produces no error output.
 
-- [ ] **Step 3: Verify secret and repository hygiene**
+- [x] **Step 3: Verify secret and repository hygiene**
 
 Run:
 
@@ -1159,7 +1176,7 @@ Expected:
 - the API-key-pattern search prints nothing.
 - `git status --short` shows only the intentional implementation-plan checkbox update, if checkboxes were marked.
 
-- [ ] **Step 4: Review Tier 1 against the approved specification**
+- [x] **Step 4: Review Tier 1 against the approved specification**
 
 Confirm each statement with a file or test:
 
@@ -1174,7 +1191,7 @@ Confirm each statement with a file or test:
 Expected: every statement has direct test or source evidence and no Tier 1
 requirement remains uncovered.
 
-- [ ] **Step 5: Commit execution tracking, if it changed**
+- [x] **Step 5: Commit execution tracking, if it changed**
 
 ```powershell
 git add docs/superpowers/plans/2026-07-31-zordon-tier-1.md

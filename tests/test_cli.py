@@ -1,0 +1,190 @@
+from collections.abc import Iterator, Sequence
+from io import StringIO
+
+from zordon.agent import Agent
+from zordon.cli import run
+from zordon.messages import Message
+from zordon.providers.base import ProviderError
+
+
+class ChunkProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def stream_reply(
+        self, system_prompt: str, messages: Sequence[Message]
+    ) -> Iterator[str]:
+        del system_prompt, messages
+        self.calls += 1
+        yield "Calm"
+        yield " response"
+
+
+class FailThenRecoverProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def stream_reply(
+        self, system_prompt: str, messages: Sequence[Message]
+    ) -> Iterator[str]:
+        del system_prompt, messages
+        self.calls += 1
+        if self.calls == 1:
+            yield "partial"
+            raise ProviderError("Connection interrupted.")
+        yield "recovered"
+
+
+class InterruptedStreamProvider:
+    def stream_reply(
+        self, system_prompt: str, messages: Sequence[Message]
+    ) -> Iterator[str]:
+        del system_prompt, messages
+        yield "partial"
+        raise KeyboardInterrupt
+
+
+class IncompleteReplyProvider:
+    def stream_reply(
+        self, system_prompt: str, messages: Sequence[Message]
+    ) -> Iterator[str]:
+        del system_prompt, messages
+        yield "partial"
+        raise ProviderError(
+            "The model response ended before response.completed."
+        )
+
+
+class RecordingOutput(StringIO):
+    def __init__(self) -> None:
+        super().__init__()
+        self.flush_count = 0
+
+    def flush(self) -> None:
+        self.flush_count += 1
+        super().flush()
+
+
+class InterruptOnceOutput(RecordingOutput):
+    def __init__(self, interrupted_text: str) -> None:
+        super().__init__()
+        self._interrupted_text = interrupted_text
+        self._interrupted = False
+
+    def write(self, text: str) -> int:
+        if not self._interrupted and text == self._interrupted_text:
+            self._interrupted = True
+            raise KeyboardInterrupt
+        return super().write(text)
+
+
+def inputs(*values: str):
+    iterator = iter(values)
+
+    def read(prompt: str) -> str:
+        del prompt
+        return next(iterator)
+
+    return read
+
+
+def test_cli_ignores_blank_input_streams_chunks_and_exits() -> None:
+    provider = ChunkProvider()
+    output = RecordingOutput()
+
+    exit_code = run(
+        Agent(provider),
+        input_fn=inputs("", "Hello", "/exit"),
+        output=output,
+    )
+
+    rendered = output.getvalue()
+    assert exit_code == 0
+    assert provider.calls == 1
+    assert "Zordon online" in rendered
+    assert "Zordon: Calm response" in rendered
+    assert "Zordon offline" in rendered
+    assert output.flush_count >= 3
+
+
+def test_cli_labels_partial_failure_and_accepts_the_next_turn() -> None:
+    provider = FailThenRecoverProvider()
+    output = RecordingOutput()
+
+    exit_code = run(
+        Agent(provider),
+        input_fn=inputs("First", "Second", "quit"),
+        output=output,
+    )
+
+    rendered = output.getvalue()
+    assert exit_code == 0
+    assert "partial" in rendered
+    assert "Reply incomplete: Connection interrupted." in rendered
+    assert "Zordon: recovered" in rendered
+
+
+def test_cli_labels_partial_reply_as_incomplete_and_keeps_history_clean() -> None:
+    agent = Agent(IncompleteReplyProvider())
+    output = RecordingOutput()
+
+    exit_code = run(
+        agent,
+        input_fn=inputs("Hello", "/exit"),
+        output=output,
+    )
+
+    assert exit_code == 0
+    assert "Zordon: partial\n[Reply incomplete:" in output.getvalue()
+    assert agent.history == ()
+
+
+def test_cli_handles_keyboard_interrupt_without_traceback() -> None:
+    output = RecordingOutput()
+
+    def interrupt(prompt: str) -> str:
+        del prompt
+        raise KeyboardInterrupt
+
+    exit_code = run(Agent(ChunkProvider()), input_fn=interrupt, output=output)
+
+    assert exit_code == 0
+    assert "Zordon offline" in output.getvalue()
+
+
+def test_cli_handles_keyboard_interrupt_while_printing_greeting() -> None:
+    output = InterruptOnceOutput(
+        "Zordon online. Type /exit when you're finished.\n"
+    )
+
+    exit_code = run(Agent(ChunkProvider()), output=output)
+
+    assert exit_code == 0
+    assert output.getvalue() == "\nZordon offline.\n"
+
+
+def test_cli_handles_keyboard_interrupt_during_streaming() -> None:
+    agent = Agent(InterruptedStreamProvider())
+    output = RecordingOutput()
+
+    exit_code = run(agent, input_fn=inputs("Hello"), output=output)
+
+    assert exit_code == 0
+    assert output.getvalue().endswith("Zordon: partial\nZordon offline.\n")
+    assert output.flush_count >= 3
+    assert agent.history == ()
+
+
+def test_cli_handles_keyboard_interrupt_while_printing_final_newline() -> None:
+    output = InterruptOnceOutput("\n")
+
+    exit_code = run(
+        Agent(ChunkProvider()),
+        input_fn=inputs("Hello"),
+        output=output,
+    )
+
+    assert exit_code == 0
+    assert output.getvalue().endswith(
+        "Zordon: Calm response\nZordon offline.\n"
+    )
