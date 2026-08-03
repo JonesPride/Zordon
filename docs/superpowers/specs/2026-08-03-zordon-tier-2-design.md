@@ -1,7 +1,7 @@
 # Zordon Tier 2 Design
 
 **Date:** 2026-08-03
-**Status:** Approved design; written specification awaiting review
+**Status:** Approved for implementation
 **Scope:** Tier 2 only — provider-neutral tools, local document access, audio metadata search, and managed playback
 
 ## Objective
