@@ -50,6 +50,10 @@ class ApprovedFolders:
             self._roots[folder_id] = canonical_path
             seen_paths.add(normalized_path)
 
+    @property
+    def folder_ids(self) -> tuple[str, ...]:
+        return tuple(sorted(self._roots, key=str.casefold))
+
     def resolve_file(self, folder_id: str, relative_path: str) -> ResolvedFile:
         normalized_id = folder_id.strip().casefold()
         try:
