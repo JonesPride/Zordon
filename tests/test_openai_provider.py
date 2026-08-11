@@ -105,7 +105,7 @@ CALCULATE = Tool(
         "required": ["expression"],
         "additionalProperties": False,
     },
-    execute=lambda arguments: ToolResult.success("unused"),
+    execute=lambda arguments, context: ToolResult.success("unused"),
 )
 
 
@@ -278,8 +278,18 @@ def test_rejects_duplicate_call_ids() -> None:
 @pytest.mark.parametrize(
     "events",
     [
-        [event("response.function_call_arguments.delta", item_id="missing", delta="{}")],
-        [event("response.function_call_arguments.done", item_id="missing", arguments="{}")],
+        [
+            event(
+                "response.function_call_arguments.delta", item_id="missing", delta="{}"
+            )
+        ],
+        [
+            event(
+                "response.function_call_arguments.done",
+                item_id="missing",
+                arguments="{}",
+            )
+        ],
         [
             event(
                 "response.output_item.done",
@@ -380,7 +390,9 @@ def test_rejects_semantic_events_after_completion() -> None:
         next(stream)
 
 
-@pytest.mark.parametrize("event_type", ["error", "response.failed", "response.incomplete"])
+@pytest.mark.parametrize(
+    "event_type", ["error", "response.failed", "response.incomplete"]
+)
 def test_rejects_provider_failure_events(event_type: str) -> None:
     provider, _ = make_provider([event(event_type)])
 
@@ -388,7 +400,7 @@ def test_rejects_provider_failure_events(event_type: str) -> None:
         list(provider.stream_response("System", [], []))
 
 
-def test_tier_one_stream_reply_remains_compatible() -> None:
+def test_tier_one_text_agent_remains_compatible() -> None:
     provider, _ = make_provider(
         [
             event("response.output_text.delta", delta="Still works"),

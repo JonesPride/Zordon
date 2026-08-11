@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 ToolArguments = dict[str, Any]
-ToolExecutor = Callable[[ToolArguments], "ToolResult"]
+ToolExecutor = Callable[[ToolArguments, "ToolContext"], "ToolResult"]
 
 _NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -49,6 +49,11 @@ def normalize_tool_name(name: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolContext:
+    turn_number: int
+
+
+@dataclass(frozen=True, slots=True)
 class ToolResult:
     ok: bool
     code: str
@@ -56,9 +61,7 @@ class ToolResult:
     data: Mapping[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def success(
-        cls, summary: str, data: Mapping[str, Any] | None = None
-    ) -> ToolResult:
+    def success(cls, summary: str, data: Mapping[str, Any] | None = None) -> ToolResult:
         return cls(ok=True, code="ok", summary=summary, data=data or {})
 
     @classmethod
@@ -101,8 +104,8 @@ class Tool:
     def input_schema(self) -> dict[str, Any]:
         return copy.deepcopy(self._input_schema)
 
-    def execute(self, arguments: ToolArguments) -> ToolResult:
-        return self._execute(arguments)
+    def execute(self, arguments: ToolArguments, context: ToolContext) -> ToolResult:
+        return self._execute(arguments, context)
 
     def model_definition(self) -> dict[str, Any]:
         return {
@@ -119,12 +122,16 @@ def _validate_schema_definition(schema: Mapping[str, Any]) -> dict[str, Any]:
     required = schema.get("required", [])
     if not isinstance(properties, Mapping):
         raise ToolDefinitionError("Tool input schema properties must be an object.")
-    if not isinstance(required, list) or not all(isinstance(name, str) for name in required):
+    if not isinstance(required, list) or not all(
+        isinstance(name, str) for name in required
+    ):
         raise ToolDefinitionError("Tool input schema required must be a list of names.")
     if not set(required).issubset(properties):
         raise ToolDefinitionError("Required arguments must be declared in properties.")
     if schema.get("additionalProperties") is not False:
-        raise ToolDefinitionError("Tool input schema must reject additional properties.")
+        raise ToolDefinitionError(
+            "Tool input schema must reject additional properties."
+        )
     for name, property_schema in properties.items():
         if not isinstance(name, str) or not isinstance(property_schema, Mapping):
             raise ToolDefinitionError("Every tool property needs a named schema.")
@@ -136,5 +143,7 @@ def _validate_schema_definition(schema: Mapping[str, Any]) -> dict[str, Any]:
             "object",
             "string",
         }:
-            raise ToolDefinitionError(f"Tool property '{name}' has an unsupported type.")
+            raise ToolDefinitionError(
+                f"Tool property '{name}' has an unsupported type."
+            )
     return copy.deepcopy(dict(schema))

@@ -2,7 +2,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from zordon.messages import JSONValue, Message, ModelItem
+from zordon.messages import JSONValue, ModelItem
 from zordon.tools import Tool
 
 
@@ -38,14 +38,4 @@ class ModelProvider(Protocol):
         tools: Sequence[Tool],
     ) -> Iterator[ProviderEvent]:
         """Yield provider-neutral events for one complete model response."""
-        raise NotImplementedError
-
-
-class TextModelProvider(Protocol):
-    """Temporary Tier 1 provider shape retained until the agent loop migrates."""
-
-    def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
-    ) -> Iterator[str]:
-        """Yield visible text for the Tier 1 compatibility path."""
         raise NotImplementedError

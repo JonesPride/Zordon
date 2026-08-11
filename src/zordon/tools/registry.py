@@ -7,6 +7,7 @@ from zordon.tools.base import (
     DuplicateToolError,
     InvalidArgumentsError,
     Tool,
+    ToolContext,
     ToolDefinitionError,
     ToolExecutionError,
     ToolResult,
@@ -46,15 +47,22 @@ class ToolRegistry:
     def model_definitions(self) -> tuple[dict[str, Any], ...]:
         return tuple(tool.model_definition() for tool in self._tools.values())
 
-    def execute(self, name: str, arguments: Mapping[str, Any]) -> ToolResult:
+    def execute(
+        self,
+        name: str,
+        arguments: Mapping[str, Any],
+        context: ToolContext,
+    ) -> ToolResult:
         tool = self.get(name)
         validated = _validate_arguments(tool, arguments)
         try:
-            result = tool.execute(validated)
+            result = tool.execute(validated, context)
         except ToolExecutionError:
             raise
         except Exception as exc:
-            raise ToolExecutionError(f"Tool '{tool.name}' failed during execution.") from exc
+            raise ToolExecutionError(
+                f"Tool '{tool.name}' failed during execution."
+            ) from exc
         if not isinstance(result, ToolResult):
             raise ToolExecutionError(f"Tool '{tool.name}' returned an invalid result.")
         return result
@@ -68,7 +76,9 @@ def _validate_arguments(tool: Tool, arguments: Mapping[str, Any]) -> dict[str, A
     required: list[str] = schema.get("required", [])
     missing = [name for name in required if name not in arguments]
     if missing:
-        raise InvalidArgumentsError(f"Tool arguments are missing required values: {', '.join(missing)}.")
+        raise InvalidArgumentsError(
+            f"Tool arguments are missing required values: {', '.join(missing)}."
+        )
     unexpected = [name for name in arguments if name not in properties]
     if unexpected:
         raise InvalidArgumentsError(f"unexpected argument: {unexpected[0]}.")

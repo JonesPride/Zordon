@@ -6,6 +6,7 @@ from zordon.tools import (
     DuplicateToolError,
     InvalidArgumentsError,
     Tool,
+    ToolContext,
     ToolDefinitionError,
     ToolExecutionError,
     ToolRegistry,
@@ -13,10 +14,15 @@ from zordon.tools import (
     UnknownToolError,
 )
 
+CONTEXT = ToolContext(turn_number=3)
+
 
 def make_add_tool(name: str = "add_numbers") -> Tool:
-    def execute(arguments: dict[str, Any]) -> ToolResult:
-        return ToolResult.success("calculated", {"total": arguments["left"] + arguments["right"]})
+    def execute(arguments: dict[str, Any], context: ToolContext) -> ToolResult:
+        assert context is CONTEXT
+        return ToolResult.success(
+            "calculated", {"total": arguments["left"] + arguments["right"]}
+        )
 
     return Tool(
         name=name,
@@ -50,9 +56,11 @@ def test_tool_names_are_normalized_consistently() -> None:
 
 def test_successful_execution_returns_predictable_result() -> None:
     result = ToolRegistry([make_add_tool()]).execute(
-        "add_numbers", {"left": 4, "right": 7}
+        "add_numbers", {"left": 4, "right": 7}, CONTEXT
     )
-    assert result == ToolResult(ok=True, code="ok", summary="calculated", data={"total": 11})
+    assert result == ToolResult(
+        ok=True, code="ok", summary="calculated", data={"total": 11}
+    )
 
 
 @pytest.mark.parametrize(
@@ -66,12 +74,16 @@ def test_successful_execution_returns_predictable_result() -> None:
 def test_argument_validation(arguments: dict[str, Any], message: str) -> None:
     registry = ToolRegistry([make_add_tool()])
     with pytest.raises(InvalidArgumentsError, match=message):
-        registry.execute("add_numbers", arguments)
+        registry.execute("add_numbers", arguments, CONTEXT)
 
 
 def test_arguments_must_be_a_mapping() -> None:
     with pytest.raises(InvalidArgumentsError, match="object"):
-        ToolRegistry([make_add_tool()]).execute("add_numbers", [])  # type: ignore[arg-type]
+        ToolRegistry([make_add_tool()]).execute(
+            "add_numbers",
+            [],  # type: ignore[arg-type]
+            CONTEXT,
+        )
 
 
 def test_duplicate_registration_is_rejected_after_normalization() -> None:
@@ -85,7 +97,7 @@ def test_unknown_lookup_and_execution_are_safe_errors() -> None:
     with pytest.raises(UnknownToolError, match="not registered"):
         registry.get("missing")
     with pytest.raises(UnknownToolError, match="not registered"):
-        registry.execute("missing", {})
+        registry.execute("missing", {}, CONTEXT)
 
 
 @pytest.mark.parametrize("name", ["", "two words", "bad-name", "9starts_wrong"])
@@ -120,7 +132,7 @@ def test_invalid_tool_definitions_are_rejected(changes: dict[str, Any]) -> None:
             "required": [],
             "additionalProperties": False,
         },
-        "execute": lambda arguments: ToolResult.success("done"),
+        "execute": lambda arguments, context: ToolResult.success("done"),
     }
     values.update(changes)
     with pytest.raises(ToolDefinitionError):
@@ -128,19 +140,24 @@ def test_invalid_tool_definitions_are_rejected(changes: dict[str, Any]) -> None:
 
 
 def test_normal_exception_is_wrapped_without_internal_details() -> None:
-    def explode(arguments: dict[str, Any]) -> ToolResult:
-        del arguments
+    def explode(arguments: dict[str, Any], context: ToolContext) -> ToolResult:
+        del arguments, context
         raise RuntimeError("database password and traceback detail")
 
     tool = Tool(
         "explode",
         "Raise an internal exception.",
-        {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
+        {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
         explode,
     )
 
     with pytest.raises(ToolExecutionError) as error:
-        ToolRegistry([tool]).execute("explode", {})
+        ToolRegistry([tool]).execute("explode", {}, CONTEXT)
 
     assert "database password" not in str(error.value)
     assert str(error.value) == "Tool 'explode' failed during execution."
@@ -150,11 +167,16 @@ def test_invalid_executor_result_is_wrapped_predictably() -> None:
     tool = Tool(
         "invalid_result",
         "Return the wrong result type.",
-        {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
-        lambda arguments: "wrong",  # type: ignore[arg-type,return-value]
+        {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+        lambda arguments, context: "wrong",  # type: ignore[arg-type,return-value]
     )
     with pytest.raises(ToolExecutionError, match="invalid result"):
-        ToolRegistry([tool]).execute("invalid_result", {})
+        ToolRegistry([tool]).execute("invalid_result", {}, CONTEXT)
 
 
 def test_model_definitions_export_independent_schema_copies() -> None:
@@ -177,4 +199,7 @@ def test_model_definitions_export_independent_schema_copies() -> None:
         },
     )
     definitions[0]["input_schema"]["required"].append("mutated")  # type: ignore[index,union-attr]
-    assert registry.model_definitions()[0]["input_schema"]["required"] == ["left", "right"]  # type: ignore[index]
+    assert registry.model_definitions()[0]["input_schema"]["required"] == [
+        "left",
+        "right",
+    ]  # type: ignore[index]

@@ -103,7 +103,9 @@ class OpenAIProvider:
                     if delta:
                         yield TextDelta(delta)
                 elif event_type == _OUTPUT_ITEM_ADDED_EVENT:
-                    _add_function_call(event, states, call_ids, tools_exposed=bool(tools))
+                    _add_function_call(
+                        event, states, call_ids, tools_exposed=bool(tools)
+                    )
                 elif event_type == _CALL_DELTA_EVENT:
                     state = _get_call_state(event, states)
                     if state.finalized_arguments is not None:
@@ -161,14 +163,6 @@ class OpenAIProvider:
             raise ProviderError(
                 "An unexpected model-provider error occurred. Please retry."
             ) from exc
-
-    def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
-    ) -> Iterator[str]:
-        """Preserve the Tier 1 text-only interface until the agent tool loop lands."""
-        for event in self.stream_response(system_prompt, messages, ()):
-            if isinstance(event, TextDelta):
-                yield event.text
 
 
 def _map_item(item: ModelItem) -> dict[str, object]:

@@ -3,56 +3,74 @@ from io import StringIO
 
 from zordon.agent import Agent
 from zordon.cli import run
-from zordon.messages import Message
-from zordon.providers.base import ProviderError
+from zordon.messages import ModelItem
+from zordon.providers.base import (
+    ProviderError,
+    ProviderEvent,
+    ResponseCompleted,
+    TextDelta,
+)
+from zordon.tools import Tool
 
 
 class ChunkProvider:
     def __init__(self) -> None:
         self.calls = 0
 
-    def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
-    ) -> Iterator[str]:
-        del system_prompt, messages
+    def stream_response(
+        self,
+        system_prompt: str,
+        items: Sequence[ModelItem],
+        tools: Sequence[Tool],
+    ) -> Iterator[ProviderEvent]:
+        del system_prompt, items, tools
         self.calls += 1
-        yield "Calm"
-        yield " response"
+        yield TextDelta("Calm")
+        yield TextDelta(" response")
+        yield ResponseCompleted()
 
 
 class FailThenRecoverProvider:
     def __init__(self) -> None:
         self.calls = 0
 
-    def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
-    ) -> Iterator[str]:
-        del system_prompt, messages
+    def stream_response(
+        self,
+        system_prompt: str,
+        items: Sequence[ModelItem],
+        tools: Sequence[Tool],
+    ) -> Iterator[ProviderEvent]:
+        del system_prompt, items, tools
         self.calls += 1
         if self.calls == 1:
-            yield "partial"
+            yield TextDelta("partial")
             raise ProviderError("Connection interrupted.")
-        yield "recovered"
+        yield TextDelta("recovered")
+        yield ResponseCompleted()
 
 
 class InterruptedStreamProvider:
-    def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
-    ) -> Iterator[str]:
-        del system_prompt, messages
-        yield "partial"
+    def stream_response(
+        self,
+        system_prompt: str,
+        items: Sequence[ModelItem],
+        tools: Sequence[Tool],
+    ) -> Iterator[ProviderEvent]:
+        del system_prompt, items, tools
+        yield TextDelta("partial")
         raise KeyboardInterrupt
 
 
 class IncompleteReplyProvider:
-    def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
-    ) -> Iterator[str]:
-        del system_prompt, messages
-        yield "partial"
-        raise ProviderError(
-            "The model response ended before response.completed."
-        )
+    def stream_response(
+        self,
+        system_prompt: str,
+        items: Sequence[ModelItem],
+        tools: Sequence[Tool],
+    ) -> Iterator[ProviderEvent]:
+        del system_prompt, items, tools
+        yield TextDelta("partial")
+        raise ProviderError("The model response ended before response.completed.")
 
 
 class RecordingOutput(StringIO):
@@ -153,9 +171,7 @@ def test_cli_handles_keyboard_interrupt_without_traceback() -> None:
 
 
 def test_cli_handles_keyboard_interrupt_while_printing_greeting() -> None:
-    output = InterruptOnceOutput(
-        "Zordon online. Type /exit when you're finished.\n"
-    )
+    output = InterruptOnceOutput("Zordon online. Type /exit when you're finished.\n")
 
     exit_code = run(Agent(ChunkProvider()), output=output)
 
@@ -185,6 +201,4 @@ def test_cli_handles_keyboard_interrupt_while_printing_final_newline() -> None:
     )
 
     assert exit_code == 0
-    assert output.getvalue().endswith(
-        "Zordon: Calm response\nZordon offline.\n"
-    )
+    assert output.getvalue().endswith("Zordon: Calm response\nZordon offline.\n")
