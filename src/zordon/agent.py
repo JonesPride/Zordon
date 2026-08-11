@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from zordon.messages import Message
-from zordon.providers.base import ModelProvider, ProviderError
+from zordon.providers.base import ProviderError, TextModelProvider
 
 SYSTEM_PROMPT = """\
 You are Zordon, the user's personal AI assistant.
@@ -22,7 +22,7 @@ outside the conversation.
 
 
 class Agent:
-    def __init__(self, provider: ModelProvider) -> None:
+    def __init__(self, provider: TextModelProvider) -> None:
         self._provider = provider
         self._history: list[Message] = []
 

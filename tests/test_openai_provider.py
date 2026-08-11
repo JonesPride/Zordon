@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -12,9 +13,15 @@ from openai import (
 )
 
 from zordon.agent import Agent
-from zordon.messages import Message
-from zordon.providers.base import ProviderError
+from zordon.messages import Message, ToolCallItem, ToolResultItem
+from zordon.providers.base import (
+    ProviderError,
+    ResponseCompleted,
+    TextDelta,
+    ToolCall,
+)
 from zordon.providers.openai_provider import OpenAIProvider
+from zordon.tools import Tool, ToolResult
 
 
 class FakeResponses:
@@ -39,142 +46,371 @@ class FakeClient:
         self.responses = responses
 
 
-def event(event_type: str, delta: str = "") -> SimpleNamespace:
-    return SimpleNamespace(type=event_type, delta=delta)
+def event(event_type: str, **values: object) -> SimpleNamespace:
+    return SimpleNamespace(type=event_type, **values)
 
 
-def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
-    responses = FakeResponses(
-        [
-            event("response.created"),
-            event("response.output_text.delta", "Hello"),
-            event("response.output_text.delta", " there"),
-            event("response.refusal.delta", "."),
-            event("response.completed"),
-        ]
+def function_item(
+    item_id: str,
+    call_id: str,
+    name: str = "calculate",
+    arguments: str | None = None,
+) -> SimpleNamespace:
+    values: dict[str, object] = {
+        "type": "function_call",
+        "id": item_id,
+        "call_id": call_id,
+        "name": name,
+    }
+    if arguments is not None:
+        values["arguments"] = arguments
+    return SimpleNamespace(**values)
+
+
+def completed_call_events(
+    *,
+    item_id: str = "item_1",
+    call_id: str = "call_1",
+    name: str = "calculate",
+    arguments: str = '{"expression":"2+2"}',
+) -> list[SimpleNamespace]:
+    return [
+        event(
+            "response.output_item.added",
+            item=function_item(item_id, call_id, name),
+        ),
+        event(
+            "response.function_call_arguments.delta",
+            item_id=item_id,
+            delta=arguments,
+        ),
+        event(
+            "response.function_call_arguments.done",
+            item_id=item_id,
+            arguments=arguments,
+        ),
+        event(
+            "response.output_item.done",
+            item=function_item(item_id, call_id, name, arguments),
+        ),
+    ]
+
+
+CALCULATE = Tool(
+    name="calculate",
+    description="Evaluate a restricted expression.",
+    input_schema={
+        "type": "object",
+        "properties": {"expression": {"type": "string"}},
+        "required": ["expression"],
+        "additionalProperties": False,
+    },
+    execute=lambda arguments: ToolResult.success("unused"),
+)
+
+
+def make_provider(
+    events: list[SimpleNamespace] | None = None,
+    failure: Exception | None = None,
+) -> tuple[OpenAIProvider, FakeResponses]:
+    responses = FakeResponses(events, failure)
+    return (
+        OpenAIProvider(
+            api_key="test-key",
+            model="gpt-5.6-terra",
+            timeout_seconds=12.0,
+            client=FakeClient(responses),
+        ),
+        responses,
     )
-    provider = OpenAIProvider(
-        api_key="test-key",
-        model="gpt-5.6-terra",
-        timeout_seconds=12.0,
-        client=FakeClient(responses),
-    )
 
-    chunks = list(
-        provider.stream_reply(
+
+def test_maps_model_items_and_strict_tool_definitions() -> None:
+    provider, responses = make_provider([event("response.completed")])
+    result = {
+        "ok": True,
+        "code": "calculated",
+        "summary": "Done",
+        "data": {"result": "4"},
+    }
+
+    assert list(
+        provider.stream_response(
             "System instructions",
             [
-                Message(role="user", content="Hi"),
-                Message(role="assistant", content="Hello"),
-                Message(role="user", content="Continue"),
+                Message("user", "Math"),
+                ToolCallItem("call_1", "calculate", {"expression": "2+2"}),
+                ToolResultItem("call_1", "calculate", result),
             ],
+            [CALCULATE],
         )
-    )
+    ) == [ResponseCompleted()]
 
-    assert chunks == ["Hello", " there", "."]
     assert responses.calls == [
         {
             "model": "gpt-5.6-terra",
             "instructions": "System instructions",
             "input": [
-                {"role": "user", "content": "Hi"},
-                {"role": "assistant", "content": "Hello"},
-                {"role": "user", "content": "Continue"},
+                {"role": "user", "content": "Math"},
+                {
+                    "type": "function_call",
+                    "call_id": "call_1",
+                    "name": "calculate",
+                    "arguments": '{"expression":"2+2"}',
+                },
+                {
+                    "type": "function_call_output",
+                    "call_id": "call_1",
+                    "output": json.dumps(result, separators=(",", ":"), sort_keys=True),
+                },
             ],
             "stream": True,
+            "tools": [
+                {
+                    "type": "function",
+                    "name": "calculate",
+                    "description": "Evaluate a restricted expression.",
+                    "parameters": CALCULATE.input_schema,
+                    "strict": True,
+                }
+            ],
         }
     ]
 
 
-def test_adapter_turns_failed_stream_event_into_provider_error() -> None:
-    responses = FakeResponses([event("response.failed")])
-    provider = OpenAIProvider(
-        api_key="test-key",
-        model="gpt-5.6-terra",
-        timeout_seconds=12.0,
-        client=FakeClient(responses),
-    )
+def test_omits_tools_for_forced_final_request() -> None:
+    provider, responses = make_provider([event("response.completed")])
 
-    with pytest.raises(ProviderError, match="failed"):
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+    list(provider.stream_response("System", [Message("user", "Finish")], []))
+
+    assert "tools" not in responses.calls[0]
 
 
-def test_adapter_turns_incomplete_stream_event_into_provider_error() -> None:
-    responses = FakeResponses(
+def test_emits_text_deltas_and_explicit_completion() -> None:
+    provider, _ = make_provider(
         [
-            event("response.output_text.delta", "Partial reply"),
-            event("response.incomplete"),
+            event("response.created"),
+            event("response.output_text.delta", delta="Hello"),
+            event("response.refusal.delta", delta=" there"),
+            event("response.completed"),
         ]
     )
-    provider = OpenAIProvider(
-        api_key="test-key",
-        model="gpt-5.6-terra",
-        timeout_seconds=12.0,
-        client=FakeClient(responses),
+
+    assert list(provider.stream_response("System", [], [])) == [
+        TextDelta("Hello"),
+        TextDelta(" there"),
+        ResponseCompleted(),
+    ]
+
+
+def test_emits_call_only_after_arguments_and_output_item_complete() -> None:
+    events = completed_call_events(arguments='{"expression":"2')
+    events[1:2] = [
+        event(
+            "response.function_call_arguments.delta",
+            item_id="item_1",
+            delta='{"expression":"2',
+        ),
+        event(
+            "response.function_call_arguments.delta",
+            item_id="item_1",
+            delta='+2"}',
+        ),
+    ]
+    events[3].arguments = '{"expression":"2+2"}'
+    events[4].item.arguments = '{"expression":"2+2"}'
+    events.append(event("response.completed"))
+    provider, _ = make_provider(events)
+
+    assert list(provider.stream_response("System", [], [CALCULATE])) == [
+        ToolCall("call_1", "calculate", {"expression": "2+2"}),
+        ResponseCompleted(),
+    ]
+
+
+def test_emits_multiple_calls_in_output_completion_order() -> None:
+    events = [
+        *completed_call_events(
+            item_id="item_1", call_id="call_1", arguments='{"expression":"1+1"}'
+        ),
+        *completed_call_events(
+            item_id="item_2", call_id="call_2", arguments='{"expression":"2+2"}'
+        ),
+        event("response.completed"),
+    ]
+    provider, _ = make_provider(events)
+
+    assert list(provider.stream_response("System", [], [CALCULATE])) == [
+        ToolCall("call_1", "calculate", {"expression": "1+1"}),
+        ToolCall("call_2", "calculate", {"expression": "2+2"}),
+        ResponseCompleted(),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [("not json", "valid JSON"), ("[]", "JSON object")],
+)
+def test_rejects_invalid_final_arguments(arguments: str, message: str) -> None:
+    provider, _ = make_provider(
+        [*completed_call_events(arguments=arguments), event("response.completed")]
     )
 
-    stream = provider.stream_reply("System", [Message("user", "Hi")])
-
-    assert next(stream) == "Partial reply"
-    with pytest.raises(ProviderError, match="incomplete"):
-        next(stream)
+    with pytest.raises(ProviderError, match=message):
+        list(provider.stream_response("System", [], [CALCULATE]))
 
 
-def test_stream_eof_without_completed_event_does_not_commit_agent_history() -> None:
-    responses = FakeResponses(
-        [event("response.output_text.delta", "Partial reply")]
-    )
-    provider = OpenAIProvider(
-        api_key="test-key",
-        model="gpt-5.6-terra",
-        timeout_seconds=12.0,
-        client=FakeClient(responses),
+def test_rejects_duplicate_call_ids() -> None:
+    provider, _ = make_provider(
+        [
+            *completed_call_events(item_id="item_1", call_id="duplicate"),
+            event(
+                "response.output_item.added",
+                item=function_item("item_2", "duplicate"),
+            ),
+        ]
     )
 
-    agent = Agent(provider)
+    with pytest.raises(ProviderError, match="duplicate"):
+        list(provider.stream_response("System", [], [CALCULATE]))
 
-    stream = agent.stream_turn("Hi")
 
-    assert next(stream) == "Partial reply"
+@pytest.mark.parametrize(
+    "events",
+    [
+        [event("response.function_call_arguments.delta", item_id="missing", delta="{}")],
+        [event("response.function_call_arguments.done", item_id="missing", arguments="{}")],
+        [
+            event(
+                "response.output_item.done",
+                item=function_item("missing", "call_1", arguments="{}"),
+            )
+        ],
+    ],
+)
+def test_rejects_call_events_without_matching_added_item(
+    events: list[SimpleNamespace],
+) -> None:
+    provider, _ = make_provider(events)
+
+    with pytest.raises(ProviderError, match="unknown function-call item"):
+        list(provider.stream_response("System", [], [CALCULATE]))
+
+
+def test_rejects_argument_delta_after_arguments_done() -> None:
+    provider, _ = make_provider(
+        [
+            event(
+                "response.output_item.added",
+                item=function_item("item_1", "call_1"),
+            ),
+            event(
+                "response.function_call_arguments.done",
+                item_id="item_1",
+                arguments="",
+            ),
+            event(
+                "response.function_call_arguments.delta",
+                item_id="item_1",
+                delta="{}",
+            ),
+        ]
+    )
+
+    with pytest.raises(ProviderError, match="after completion"):
+        list(provider.stream_response("System", [], [CALCULATE]))
+
+
+def test_rejects_argument_finalization_mismatch() -> None:
+    events = completed_call_events()
+    events[2].arguments = '{"expression":"3+3"}'
+    provider, _ = make_provider(events)
+
+    with pytest.raises(ProviderError, match="did not match"):
+        list(provider.stream_response("System", [], [CALCULATE]))
+
+
+def test_rejects_incomplete_function_item_at_response_completion() -> None:
+    provider, _ = make_provider(
+        [
+            event(
+                "response.output_item.added",
+                item=function_item("item_1", "call_1"),
+            ),
+            event("response.completed"),
+        ]
+    )
+
+    with pytest.raises(ProviderError, match="function call was incomplete"):
+        list(provider.stream_response("System", [], [CALCULATE]))
+
+
+def test_rejects_function_call_when_no_tools_are_exposed() -> None:
+    provider, _ = make_provider(
+        [
+            event(
+                "response.output_item.added",
+                item=function_item("item_1", "call_1"),
+            )
+        ]
+    )
+
+    with pytest.raises(ProviderError, match="no tools were exposed"):
+        list(provider.stream_response("System", [], []))
+
+
+def test_rejects_eof_without_explicit_completion() -> None:
+    provider, _ = make_provider([event("response.output_text.delta", delta="Partial")])
+
     with pytest.raises(ProviderError, match="before it completed"):
-        next(stream)
-    assert agent.history == ()
+        list(provider.stream_response("System", [], []))
 
 
-def test_incomplete_stream_does_not_commit_partial_turn_to_agent_history() -> None:
-    responses = FakeResponses(
+def test_rejects_semantic_events_after_completion() -> None:
+    provider, _ = make_provider(
         [
-            event("response.output_text.delta", "Partial reply"),
-            event("response.incomplete"),
+            event("response.completed"),
+            event("response.output_text.delta", delta="late"),
         ]
     )
-    provider = OpenAIProvider(
-        api_key="test-key",
-        model="gpt-5.6-terra",
-        timeout_seconds=12.0,
-        client=FakeClient(responses),
+
+    stream = provider.stream_response("System", [], [])
+    assert next(stream) == ResponseCompleted()
+    with pytest.raises(ProviderError, match="after completion"):
+        next(stream)
+
+
+@pytest.mark.parametrize("event_type", ["error", "response.failed", "response.incomplete"])
+def test_rejects_provider_failure_events(event_type: str) -> None:
+    provider, _ = make_provider([event(event_type)])
+
+    with pytest.raises(ProviderError, match="incomplete or failed"):
+        list(provider.stream_response("System", [], []))
+
+
+def test_tier_one_stream_reply_remains_compatible() -> None:
+    provider, _ = make_provider(
+        [
+            event("response.output_text.delta", delta="Still works"),
+            event("response.completed"),
+        ]
     )
     agent = Agent(provider)
 
-    stream = agent.stream_turn("Keep this turn clean")
-
-    assert next(stream) == "Partial reply"
-    with pytest.raises(ProviderError, match="incomplete"):
-        next(stream)
-    assert agent.history == ()
-
-
-def test_adapter_translates_unexpected_sdk_failure() -> None:
-    responses = FakeResponses(failure=RuntimeError("internal detail"))
-    provider = OpenAIProvider(
-        api_key="test-key",
-        model="gpt-5.6-terra",
-        timeout_seconds=12.0,
-        client=FakeClient(responses),
+    assert list(agent.stream_turn("Hello")) == ["Still works"]
+    assert agent.history == (
+        Message("user", "Hello"),
+        Message("assistant", "Still works"),
     )
 
-    with pytest.raises(ProviderError, match="unexpected model-provider"):
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+
+def test_translates_unexpected_sdk_failure_without_leaking_details() -> None:
+    provider, _ = make_provider(failure=RuntimeError("internal detail"))
+
+    with pytest.raises(ProviderError, match="unexpected model-provider") as error:
+        list(provider.stream_response("System", [], []))
+
+    assert "internal detail" not in str(error.value)
 
 
 @pytest.mark.parametrize(
@@ -203,15 +439,11 @@ def test_adapter_translates_unexpected_sdk_failure() -> None:
             "temporarily rate-limited",
         ),
         (
-            APITimeoutError(
-                httpx.Request("POST", "/responses")
-            ),
+            APITimeoutError(httpx.Request("POST", "/responses")),
             "could not be reached",
         ),
         (
-            APIConnectionError(
-                request=httpx.Request("POST", "/responses")
-            ),
+            APIConnectionError(request=httpx.Request("POST", "/responses")),
             "could not be reached",
         ),
         (
@@ -224,18 +456,12 @@ def test_adapter_translates_unexpected_sdk_failure() -> None:
         ),
     ],
 )
-def test_adapter_maps_sdk_exceptions_to_safe_provider_errors(
+def test_maps_sdk_exceptions_to_safe_provider_errors(
     sdk_error: Exception, safe_message: str
 ) -> None:
-    responses = FakeResponses(failure=sdk_error)
-    provider = OpenAIProvider(
-        api_key="test-key",
-        model="gpt-5.6-terra",
-        timeout_seconds=12.0,
-        client=FakeClient(responses),
-    )
+    provider, _ = make_provider(failure=sdk_error)
 
     with pytest.raises(ProviderError, match=safe_message) as error:
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+        list(provider.stream_response("System", [], []))
 
     assert error.value.__cause__ is sdk_error
