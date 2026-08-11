@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from zordon.debug_logging import DebugLogger
 from zordon.messages import Message
 from zordon.providers.base import ModelProvider, ProviderError
 
@@ -22,9 +23,18 @@ outside the conversation.
 
 
 class Agent:
-    def __init__(self, provider: ModelProvider) -> None:
+    def __init__(
+        self,
+        provider: ModelProvider,
+        history_message_limit: int = 40,
+        output_token_limit: int = 2048,
+        debug_logger: DebugLogger | None = None,
+    ) -> None:
         self._provider = provider
         self._history: list[Message] = []
+        self._history_message_limit = history_message_limit
+        self._output_token_limit = output_token_limit
+        self._debug_logger = debug_logger or DebugLogger(None)
 
     @property
     def history(self) -> tuple[Message, ...]:
@@ -38,15 +48,21 @@ class Agent:
         user_message = Message(role="user", content=clean_text)
         candidate_history = (*self._history, user_message)
         reply_parts: list[str] = []
+        self._debug_logger.event("turn_started", message_count=len(candidate_history))
 
-        for chunk in self._provider.stream_reply(
-            SYSTEM_PROMPT,
-            candidate_history,
-        ):
-            if not chunk:
-                continue
-            reply_parts.append(chunk)
-            yield chunk
+        try:
+            for chunk in self._provider.stream_reply(
+                SYSTEM_PROMPT,
+                candidate_history,
+                self._output_token_limit,
+            ):
+                if not chunk:
+                    continue
+                reply_parts.append(chunk)
+                yield chunk
+        except Exception:
+            self._debug_logger.event("turn_failed", message_count=len(candidate_history))
+            raise
 
         reply = "".join(reply_parts)
         if not reply.strip():
@@ -57,4 +73,11 @@ class Agent:
                 user_message,
                 Message(role="assistant", content=reply),
             )
+        )
+        if len(self._history) > self._history_message_limit:
+            del self._history[: -self._history_message_limit]
+        self._debug_logger.event(
+            "turn_completed",
+            message_count=len(self._history),
+            output_chars=len(reply),
         )

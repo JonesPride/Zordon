@@ -6,6 +6,7 @@ from typing import TextIO
 
 from zordon.agent import Agent
 from zordon.config import ConfigurationError, load_settings
+from zordon.debug_logging import DebugLogger
 from zordon.providers.base import ProviderError
 from zordon.providers.openai_provider import OpenAIProvider
 
@@ -74,7 +75,14 @@ def main() -> int:
         model=settings.model,
         timeout_seconds=settings.timeout_seconds,
     )
-    return run(Agent(provider))
+    return run(
+        Agent(
+            provider,
+            history_message_limit=settings.history_message_limit,
+            output_token_limit=settings.output_token_limit,
+            debug_logger=DebugLogger(settings.debug_log_path),
+        )
+    )
 
 
 if __name__ == "__main__":

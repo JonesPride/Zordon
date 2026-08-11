@@ -9,6 +9,9 @@ def test_load_settings_uses_tier_one_defaults() -> None:
     assert settings.api_key == "test-key"
     assert settings.model == "gpt-5.6-terra"
     assert settings.timeout_seconds == 60.0
+    assert settings.history_message_limit == 40
+    assert settings.output_token_limit == 2048
+    assert settings.debug_log_path is None
 
 
 def test_load_settings_accepts_supported_overrides() -> None:
@@ -17,11 +20,17 @@ def test_load_settings_accepts_supported_overrides() -> None:
             "OPENAI_API_KEY": "test-key",
             "ZORDON_MODEL": "gpt-5.6-sol",
             "ZORDON_REQUEST_TIMEOUT_SECONDS": "15.5",
+            "ZORDON_HISTORY_MESSAGE_LIMIT": "12",
+            "ZORDON_OUTPUT_TOKEN_LIMIT": "900",
+            "ZORDON_DEBUG_LOG": "logs/zordon-debug.jsonl",
         }
     )
 
     assert settings.model == "gpt-5.6-sol"
     assert settings.timeout_seconds == 15.5
+    assert settings.history_message_limit == 12
+    assert settings.output_token_limit == 900
+    assert str(settings.debug_log_path).endswith("logs/zordon-debug.jsonl")
 
 
 @pytest.mark.parametrize(
@@ -36,6 +45,8 @@ def test_load_settings_accepts_supported_overrides() -> None:
             },
             "positive number",
         ),
+        ({"OPENAI_API_KEY": "test-key", "ZORDON_HISTORY_MESSAGE_LIMIT": "3"}, "even integer"),
+        ({"OPENAI_API_KEY": "test-key", "ZORDON_OUTPUT_TOKEN_LIMIT": "0"}, "between 1 and"),
         (
             {
                 "OPENAI_API_KEY": "test-key",
@@ -45,9 +56,7 @@ def test_load_settings_accepts_supported_overrides() -> None:
         ),
     ],
 )
-def test_load_settings_rejects_invalid_configuration(
-    environ: dict[str, str], message: str
-) -> None:
+def test_load_settings_rejects_invalid_configuration(environ: dict[str, str], message: str) -> None:
     with pytest.raises(ConfigurationError, match=message):
         load_settings(environ)
 
@@ -58,10 +67,7 @@ def test_missing_key_error_explains_secure_powershell_setup() -> None:
 
     message = str(error.value)
     assert "https://platform.openai.com/api-keys" in message
-    assert (
-        "if (-not (Test-Path .env)) { Copy-Item .env.example .env }"
-        in message
-    )
+    assert "if (-not (Test-Path .env)) { Copy-Item .env.example .env }" in message
     assert "text editor" in message
     assert "command history" in message
 

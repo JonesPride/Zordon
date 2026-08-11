@@ -68,6 +68,7 @@ def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
                 Message(role="assistant", content="Hello"),
                 Message(role="user", content="Continue"),
             ],
+            max_output_tokens=700,
         )
     )
 
@@ -82,6 +83,7 @@ def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
                 {"role": "user", "content": "Continue"},
             ],
             "stream": True,
+            "max_output_tokens": 700,
         }
     ]
 
@@ -96,7 +98,7 @@ def test_adapter_turns_failed_stream_event_into_provider_error() -> None:
     )
 
     with pytest.raises(ProviderError, match="failed"):
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+        list(provider.stream_reply("System", [Message("user", "Hi")], 2048))
 
 
 def test_adapter_turns_incomplete_stream_event_into_provider_error() -> None:
@@ -113,7 +115,7 @@ def test_adapter_turns_incomplete_stream_event_into_provider_error() -> None:
         client=FakeClient(responses),
     )
 
-    stream = provider.stream_reply("System", [Message("user", "Hi")])
+    stream = provider.stream_reply("System", [Message("user", "Hi")], 2048)
 
     assert next(stream) == "Partial reply"
     with pytest.raises(ProviderError, match="incomplete"):
@@ -121,9 +123,7 @@ def test_adapter_turns_incomplete_stream_event_into_provider_error() -> None:
 
 
 def test_stream_eof_without_completed_event_does_not_commit_agent_history() -> None:
-    responses = FakeResponses(
-        [event("response.output_text.delta", "Partial reply")]
-    )
+    responses = FakeResponses([event("response.output_text.delta", "Partial reply")])
     provider = OpenAIProvider(
         api_key="test-key",
         model="gpt-5.6-terra",
@@ -174,7 +174,7 @@ def test_adapter_translates_unexpected_sdk_failure() -> None:
     )
 
     with pytest.raises(ProviderError, match="unexpected model-provider"):
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+        list(provider.stream_reply("System", [Message("user", "Hi")], 2048))
 
 
 @pytest.mark.parametrize(
@@ -203,15 +203,11 @@ def test_adapter_translates_unexpected_sdk_failure() -> None:
             "temporarily rate-limited",
         ),
         (
-            APITimeoutError(
-                httpx.Request("POST", "/responses")
-            ),
+            APITimeoutError(httpx.Request("POST", "/responses")),
             "could not be reached",
         ),
         (
-            APIConnectionError(
-                request=httpx.Request("POST", "/responses")
-            ),
+            APIConnectionError(request=httpx.Request("POST", "/responses")),
             "could not be reached",
         ),
         (
@@ -236,6 +232,6 @@ def test_adapter_maps_sdk_exceptions_to_safe_provider_errors(
     )
 
     with pytest.raises(ProviderError, match=safe_message) as error:
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+        list(provider.stream_reply("System", [Message("user", "Hi")], 2048))
 
     assert error.value.__cause__ is sdk_error

@@ -41,12 +41,12 @@ class OpenAIProvider:
         )
 
     def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
+        self,
+        system_prompt: str,
+        messages: Sequence[Message],
+        max_output_tokens: int,
     ) -> Iterator[str]:
-        payload = [
-            {"role": message.role, "content": message.content}
-            for message in messages
-        ]
+        payload = [{"role": message.role, "content": message.content} for message in messages]
 
         try:
             stream = self._client.responses.create(
@@ -54,6 +54,7 @@ class OpenAIProvider:
                 instructions=system_prompt,
                 input=payload,
                 stream=True,
+                max_output_tokens=max_output_tokens,
             )
             completed = False
             for event in stream:
@@ -87,9 +88,7 @@ class OpenAIProvider:
                 "The model could not be reached. Check the connection and retry."
             ) from exc
         except APIError as exc:
-            raise ProviderError(
-                "The model provider returned an error. Please retry."
-            ) from exc
+            raise ProviderError("The model provider returned an error. Please retry.") from exc
         except Exception as exc:
             raise ProviderError(
                 "An unexpected model-provider error occurred. Please retry."
