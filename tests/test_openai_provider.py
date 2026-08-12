@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, assert_type
 
 import httpx
 import pytest
@@ -10,9 +10,12 @@ from openai import (
     AuthenticationError,
     RateLimitError,
 )
+from openai.types.responses import ResponseInputParam
+from openai.types.shared_params import Reasoning
 
 from zordon.agent import Agent
 from zordon.messages import Message
+from zordon.providers import openai_provider
 from zordon.providers.base import ProviderError
 from zordon.providers.openai_provider import OpenAIProvider
 
@@ -41,6 +44,24 @@ class FakeClient:
 
 def event(event_type: str, delta: str = "") -> SimpleNamespace:
     return SimpleNamespace(type=event_type, delta=delta)
+
+
+def test_sdk_payload_builders_preserve_request_shapes() -> None:
+    assert hasattr(openai_provider, "_build_response_input")
+    assert hasattr(openai_provider, "_build_reasoning")
+
+    response_input = openai_provider._build_response_input(
+        [Message(role="user", content="Hi"), Message(role="assistant", content="Hello")]
+    )
+    reasoning = openai_provider._build_reasoning("high")
+
+    assert_type(response_input, ResponseInputParam)
+    assert_type(reasoning, Reasoning)
+    assert response_input == [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "content": "Hello"},
+    ]
+    assert reasoning == {"effort": "high"}
 
 
 def test_adapter_maps_messages_and_yields_only_visible_text() -> None:

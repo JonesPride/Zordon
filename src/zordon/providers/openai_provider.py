@@ -11,6 +11,8 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
+from openai.types.responses import EasyInputMessageParam, ResponseInputParam
+from openai.types.shared_params import Reasoning
 
 from zordon.config import ReasoningEffort
 from zordon.messages import Message
@@ -27,6 +29,16 @@ _FAILURE_EVENTS = {
 }
 
 
+def _build_response_input(messages: Sequence[Message]) -> ResponseInputParam:
+    return [
+        EasyInputMessageParam(role=message.role, content=message.content) for message in messages
+    ]
+
+
+def _build_reasoning(effort: ReasoningEffort) -> Reasoning:
+    return Reasoning(effort=effort)
+
+
 class OpenAIProvider:
     def __init__(
         self,
@@ -37,7 +49,7 @@ class OpenAIProvider:
         client: Any | None = None,
     ) -> None:
         self._model = model
-        self._reasoning_effort = reasoning_effort
+        self._reasoning_effort: ReasoningEffort = reasoning_effort
         self._client = client or OpenAI(
             api_key=api_key,
             timeout=timeout_seconds,
@@ -49,7 +61,7 @@ class OpenAIProvider:
         messages: Sequence[Message],
         max_output_tokens: int,
     ) -> Iterator[str]:
-        payload = [{"role": message.role, "content": message.content} for message in messages]
+        payload = _build_response_input(messages)
 
         try:
             stream = self._client.responses.create(
@@ -58,7 +70,7 @@ class OpenAIProvider:
                 input=payload,
                 stream=True,
                 max_output_tokens=max_output_tokens,
-                reasoning={"effort": self._reasoning_effort},
+                reasoning=_build_reasoning(self._reasoning_effort),
             )
             completed = False
             for event in stream:
