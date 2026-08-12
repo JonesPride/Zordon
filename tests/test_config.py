@@ -33,7 +33,8 @@ def test_load_settings_accepts_supported_overrides() -> None:
     assert settings.history_message_limit == 12
     assert settings.output_token_limit == 900
     assert settings.reasoning_effort == "high"
-    assert str(settings.debug_log_path).endswith("logs/zordon-debug.jsonl")
+    assert settings.debug_log_path is not None
+    assert settings.debug_log_path.parts[-2:] == ("logs", "zordon-debug.jsonl")
 
 
 @pytest.mark.parametrize(
