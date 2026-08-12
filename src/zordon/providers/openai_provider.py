@@ -11,7 +11,10 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
+from openai.types.responses import EasyInputMessageParam, ResponseInputParam
+from openai.types.shared_params import Reasoning
 
+from zordon.config import ReasoningEffort
 from zordon.messages import Message
 from zordon.providers.base import ProviderError
 
@@ -26,27 +29,39 @@ _FAILURE_EVENTS = {
 }
 
 
+def _build_response_input(messages: Sequence[Message]) -> ResponseInputParam:
+    return [
+        EasyInputMessageParam(role=message.role, content=message.content) for message in messages
+    ]
+
+
+def _build_reasoning(effort: ReasoningEffort) -> Reasoning:
+    return Reasoning(effort=effort)
+
+
 class OpenAIProvider:
     def __init__(
         self,
         api_key: str,
         model: str,
         timeout_seconds: float,
+        reasoning_effort: ReasoningEffort = "medium",
         client: Any | None = None,
     ) -> None:
         self._model = model
+        self._reasoning_effort: ReasoningEffort = reasoning_effort
         self._client = client or OpenAI(
             api_key=api_key,
             timeout=timeout_seconds,
         )
 
     def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
+        self,
+        system_prompt: str,
+        messages: Sequence[Message],
+        max_output_tokens: int,
     ) -> Iterator[str]:
-        payload = [
-            {"role": message.role, "content": message.content}
-            for message in messages
-        ]
+        payload = _build_response_input(messages)
 
         try:
             stream = self._client.responses.create(
@@ -54,6 +69,8 @@ class OpenAIProvider:
                 instructions=system_prompt,
                 input=payload,
                 stream=True,
+                max_output_tokens=max_output_tokens,
+                reasoning=_build_reasoning(self._reasoning_effort),
             )
             completed = False
             for event in stream:
@@ -87,9 +104,7 @@ class OpenAIProvider:
                 "The model could not be reached. Check the connection and retry."
             ) from exc
         except APIError as exc:
-            raise ProviderError(
-                "The model provider returned an error. Please retry."
-            ) from exc
+            raise ProviderError("The model provider returned an error. Please retry.") from exc
         except Exception as exc:
             raise ProviderError(
                 "An unexpected model-provider error occurred. Please retry."

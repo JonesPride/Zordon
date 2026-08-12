@@ -10,7 +10,10 @@ class ProviderError(RuntimeError):
 
 class ModelProvider(Protocol):
     def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
+        self,
+        system_prompt: str,
+        messages: Sequence[Message],
+        max_output_tokens: int,
     ) -> Iterator[str]:
         """Yield user-visible text chunks for one candidate conversation."""
         raise NotImplementedError

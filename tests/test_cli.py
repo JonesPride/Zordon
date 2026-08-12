@@ -12,9 +12,9 @@ class ChunkProvider:
         self.calls = 0
 
     def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
+        self, system_prompt: str, messages: Sequence[Message], max_output_tokens: int
     ) -> Iterator[str]:
-        del system_prompt, messages
+        del system_prompt, messages, max_output_tokens
         self.calls += 1
         yield "Calm"
         yield " response"
@@ -25,9 +25,9 @@ class FailThenRecoverProvider:
         self.calls = 0
 
     def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
+        self, system_prompt: str, messages: Sequence[Message], max_output_tokens: int
     ) -> Iterator[str]:
-        del system_prompt, messages
+        del system_prompt, messages, max_output_tokens
         self.calls += 1
         if self.calls == 1:
             yield "partial"
@@ -37,22 +37,20 @@ class FailThenRecoverProvider:
 
 class InterruptedStreamProvider:
     def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
+        self, system_prompt: str, messages: Sequence[Message], max_output_tokens: int
     ) -> Iterator[str]:
-        del system_prompt, messages
+        del system_prompt, messages, max_output_tokens
         yield "partial"
         raise KeyboardInterrupt
 
 
 class IncompleteReplyProvider:
     def stream_reply(
-        self, system_prompt: str, messages: Sequence[Message]
+        self, system_prompt: str, messages: Sequence[Message], max_output_tokens: int
     ) -> Iterator[str]:
-        del system_prompt, messages
+        del system_prompt, messages, max_output_tokens
         yield "partial"
-        raise ProviderError(
-            "The model response ended before response.completed."
-        )
+        raise ProviderError("The model response ended before response.completed.")
 
 
 class RecordingOutput(StringIO):
@@ -153,9 +151,7 @@ def test_cli_handles_keyboard_interrupt_without_traceback() -> None:
 
 
 def test_cli_handles_keyboard_interrupt_while_printing_greeting() -> None:
-    output = InterruptOnceOutput(
-        "Zordon online. Type /exit when you're finished.\n"
-    )
+    output = InterruptOnceOutput("Zordon online. Type /exit when you're finished.\n")
 
     exit_code = run(Agent(ChunkProvider()), output=output)
 
@@ -185,6 +181,4 @@ def test_cli_handles_keyboard_interrupt_while_printing_final_newline() -> None:
     )
 
     assert exit_code == 0
-    assert output.getvalue().endswith(
-        "Zordon: Calm response\nZordon offline.\n"
-    )
+    assert output.getvalue().endswith("Zordon: Calm response\nZordon offline.\n")

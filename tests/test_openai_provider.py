@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, assert_type
 
 import httpx
 import pytest
@@ -10,9 +10,12 @@ from openai import (
     AuthenticationError,
     RateLimitError,
 )
+from openai.types.responses import ResponseInputParam
+from openai.types.shared_params import Reasoning
 
 from zordon.agent import Agent
 from zordon.messages import Message
+from zordon.providers import openai_provider
 from zordon.providers.base import ProviderError
 from zordon.providers.openai_provider import OpenAIProvider
 
@@ -43,6 +46,24 @@ def event(event_type: str, delta: str = "") -> SimpleNamespace:
     return SimpleNamespace(type=event_type, delta=delta)
 
 
+def test_sdk_payload_builders_preserve_request_shapes() -> None:
+    assert hasattr(openai_provider, "_build_response_input")
+    assert hasattr(openai_provider, "_build_reasoning")
+
+    response_input = openai_provider._build_response_input(
+        [Message(role="user", content="Hi"), Message(role="assistant", content="Hello")]
+    )
+    reasoning = openai_provider._build_reasoning("high")
+
+    assert_type(response_input, ResponseInputParam)
+    assert_type(reasoning, Reasoning)
+    assert response_input == [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "content": "Hello"},
+    ]
+    assert reasoning == {"effort": "high"}
+
+
 def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
     responses = FakeResponses(
         [
@@ -57,6 +78,7 @@ def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
         api_key="test-key",
         model="gpt-5.6-terra",
         timeout_seconds=12.0,
+        reasoning_effort="high",
         client=FakeClient(responses),
     )
 
@@ -68,6 +90,7 @@ def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
                 Message(role="assistant", content="Hello"),
                 Message(role="user", content="Continue"),
             ],
+            max_output_tokens=700,
         )
     )
 
@@ -82,6 +105,8 @@ def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
                 {"role": "user", "content": "Continue"},
             ],
             "stream": True,
+            "max_output_tokens": 700,
+            "reasoning": {"effort": "high"},
         }
     ]
 
@@ -96,7 +121,7 @@ def test_adapter_turns_failed_stream_event_into_provider_error() -> None:
     )
 
     with pytest.raises(ProviderError, match="failed"):
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+        list(provider.stream_reply("System", [Message("user", "Hi")], 2048))
 
 
 def test_adapter_turns_incomplete_stream_event_into_provider_error() -> None:
@@ -113,7 +138,7 @@ def test_adapter_turns_incomplete_stream_event_into_provider_error() -> None:
         client=FakeClient(responses),
     )
 
-    stream = provider.stream_reply("System", [Message("user", "Hi")])
+    stream = provider.stream_reply("System", [Message("user", "Hi")], 2048)
 
     assert next(stream) == "Partial reply"
     with pytest.raises(ProviderError, match="incomplete"):
@@ -121,9 +146,7 @@ def test_adapter_turns_incomplete_stream_event_into_provider_error() -> None:
 
 
 def test_stream_eof_without_completed_event_does_not_commit_agent_history() -> None:
-    responses = FakeResponses(
-        [event("response.output_text.delta", "Partial reply")]
-    )
+    responses = FakeResponses([event("response.output_text.delta", "Partial reply")])
     provider = OpenAIProvider(
         api_key="test-key",
         model="gpt-5.6-terra",
@@ -174,7 +197,7 @@ def test_adapter_translates_unexpected_sdk_failure() -> None:
     )
 
     with pytest.raises(ProviderError, match="unexpected model-provider"):
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+        list(provider.stream_reply("System", [Message("user", "Hi")], 2048))
 
 
 @pytest.mark.parametrize(
@@ -203,15 +226,11 @@ def test_adapter_translates_unexpected_sdk_failure() -> None:
             "temporarily rate-limited",
         ),
         (
-            APITimeoutError(
-                httpx.Request("POST", "/responses")
-            ),
+            APITimeoutError(httpx.Request("POST", "/responses")),
             "could not be reached",
         ),
         (
-            APIConnectionError(
-                request=httpx.Request("POST", "/responses")
-            ),
+            APIConnectionError(request=httpx.Request("POST", "/responses")),
             "could not be reached",
         ),
         (
@@ -236,6 +255,6 @@ def test_adapter_maps_sdk_exceptions_to_safe_provider_errors(
     )
 
     with pytest.raises(ProviderError, match=safe_message) as error:
-        list(provider.stream_reply("System", [Message("user", "Hi")]))
+        list(provider.stream_reply("System", [Message("user", "Hi")], 2048))
 
     assert error.value.__cause__ is sdk_error
