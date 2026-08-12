@@ -65,9 +65,7 @@ class ToolResult:
         return cls(ok=True, code="ok", summary=summary, data=data or {})
 
     @classmethod
-    def failure(
-        cls, code: str, summary: str, data: Mapping[str, Any] | None = None
-    ) -> ToolResult:
+    def failure(cls, code: str, summary: str, data: Mapping[str, Any] | None = None) -> ToolResult:
         return cls(ok=False, code=code, summary=summary, data=data or {})
 
 
@@ -136,16 +134,12 @@ def _validate_schema_definition(schema: Mapping[str, Any]) -> dict[str, Any]:
     required = schema.get("required", [])
     if not isinstance(properties, Mapping):
         raise ToolDefinitionError("Tool input schema properties must be an object.")
-    if not isinstance(required, list) or not all(
-        isinstance(name, str) for name in required
-    ):
+    if not isinstance(required, list) or not all(isinstance(name, str) for name in required):
         raise ToolDefinitionError("Tool input schema required must be a list of names.")
     if not set(required).issubset(properties):
         raise ToolDefinitionError("Required arguments must be declared in properties.")
     if schema.get("additionalProperties") is not False:
-        raise ToolDefinitionError(
-            "Tool input schema must reject additional properties."
-        )
+        raise ToolDefinitionError("Tool input schema must reject additional properties.")
     for name, property_schema in properties.items():
         if not isinstance(name, str) or not isinstance(property_schema, Mapping):
             raise ToolDefinitionError("Every tool property needs a named schema.")
@@ -157,7 +151,5 @@ def _validate_schema_definition(schema: Mapping[str, Any]) -> dict[str, Any]:
             "object",
             "string",
         }:
-            raise ToolDefinitionError(
-                f"Tool property '{name}' has an unsupported type."
-            )
+            raise ToolDefinitionError(f"Tool property '{name}' has an unsupported type.")
     return copy.deepcopy(dict(schema))

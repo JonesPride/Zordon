@@ -98,46 +98,99 @@ def build_builtin_registry(
         return execute
 
     tools = (
-        Tool("get_current_datetime", "Get the current local and UTC date and time.", _EMPTY_SCHEMA, current_datetime),
         Tool(
-            "calculate", "Calculate a restricted decimal arithmetic expression.",
-            _object_schema({"expression": {"type": "string", "minLength": 1, "maxLength": 256}}, ["expression"]),
-            calculate_value, safety_class="compute",
+            "get_current_datetime",
+            "Get the current local and UTC date and time.",
+            _EMPTY_SCHEMA,
+            current_datetime,
         ),
         Tool(
-            "search_documents", "Search supported documents in approved folders.",
-            _object_schema({
-                "query": {"type": "string", "minLength": 1},
-                "folder_ids": {"type": "array", "items": {"type": "string"}},
-                "max_results": {"type": "integer", "minimum": 1, "maximum": result_maximum},
-            }, ["query"]), search_documents,
+            "calculate",
+            "Calculate a restricted decimal arithmetic expression.",
+            _object_schema(
+                {"expression": {"type": "string", "minLength": 1, "maxLength": 256}}, ["expression"]
+            ),
+            calculate_value,
+            safety_class="compute",
         ),
         Tool(
-            "read_document", "Read a bounded window from a document in an approved folder.",
-            _object_schema({
-                "folder_id": {"type": "string", "minLength": 1},
-                "relative_path": {"type": "string", "minLength": 1},
-                "start_char": {"type": "integer", "minimum": 0},
-                "max_chars": {"type": "integer", "minimum": 1, "maximum": limits.document_read_chars},
-            }, ["folder_id", "relative_path"]), read_document,
+            "search_documents",
+            "Search supported documents in approved folders.",
+            _object_schema(
+                {
+                    "query": {"type": "string", "minLength": 1},
+                    "folder_ids": {"type": "array", "items": {"type": "string"}},
+                    "max_results": {"type": "integer", "minimum": 1, "maximum": result_maximum},
+                },
+                ["query"],
+            ),
+            search_documents,
         ),
         Tool(
-            "search_audio", "Search audio metadata in approved folders.",
-            _object_schema({
-                "query": {"type": "string", "minLength": 1},
-                "folder_ids": {"type": "array", "items": {"type": "string"}},
-                "max_results": {"type": "integer", "minimum": 1, "maximum": result_maximum},
-            }, ["query"]), search_audio,
+            "read_document",
+            "Read a bounded window from a document in an approved folder.",
+            _object_schema(
+                {
+                    "folder_id": {"type": "string", "minLength": 1},
+                    "relative_path": {"type": "string", "minLength": 1},
+                    "start_char": {"type": "integer", "minimum": 0},
+                    "max_chars": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": limits.document_read_chars,
+                    },
+                },
+                ["folder_id", "relative_path"],
+            ),
+            read_document,
         ),
         Tool(
-            "play_audio", "Play a previously returned opaque audio ID.",
+            "search_audio",
+            "Search audio metadata in approved folders.",
+            _object_schema(
+                {
+                    "query": {"type": "string", "minLength": 1},
+                    "folder_ids": {"type": "array", "items": {"type": "string"}},
+                    "max_results": {"type": "integer", "minimum": 1, "maximum": result_maximum},
+                },
+                ["query"],
+            ),
+            search_audio,
+        ),
+        Tool(
+            "play_audio",
+            "Play a previously returned opaque audio ID.",
             _object_schema({"audio_id": {"type": "string", "minLength": 1}}, ["audio_id"]),
-            play_audio, safety_class="playback",
+            play_audio,
+            safety_class="playback",
         ),
-        Tool("pause_audio", "Pause current audio playback.", _EMPTY_SCHEMA, no_arguments(playback.pause), safety_class="playback"),
-        Tool("resume_audio", "Resume paused audio playback.", _EMPTY_SCHEMA, no_arguments(playback.resume), safety_class="playback"),
-        Tool("stop_audio", "Stop current audio playback.", _EMPTY_SCHEMA, no_arguments(playback.stop), safety_class="playback"),
-        Tool("now_playing", "Get the current playback state.", _EMPTY_SCHEMA, no_arguments(playback.now_playing)),
+        Tool(
+            "pause_audio",
+            "Pause current audio playback.",
+            _EMPTY_SCHEMA,
+            no_arguments(playback.pause),
+            safety_class="playback",
+        ),
+        Tool(
+            "resume_audio",
+            "Resume paused audio playback.",
+            _EMPTY_SCHEMA,
+            no_arguments(playback.resume),
+            safety_class="playback",
+        ),
+        Tool(
+            "stop_audio",
+            "Stop current audio playback.",
+            _EMPTY_SCHEMA,
+            no_arguments(playback.stop),
+            safety_class="playback",
+        ),
+        Tool(
+            "now_playing",
+            "Get the current playback state.",
+            _EMPTY_SCHEMA,
+            no_arguments(playback.now_playing),
+        ),
     )
     return ToolRegistry(tools)
 

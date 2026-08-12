@@ -158,9 +158,7 @@ def test_unexpected_parser_failure_is_wrapped_without_exception_text(
     ("name", "size"),
     [("huge.txt", 2 * 1024 * 1024 + 1), ("huge.pdf", 20 * 1024 * 1024 + 1)],
 )
-def test_source_size_caps_are_checked_before_parsing(
-    tmp_path: Path, name: str, size: int
-) -> None:
+def test_source_size_caps_are_checked_before_parsing(tmp_path: Path, name: str, size: int) -> None:
     root = tmp_path / "root"
     root.mkdir()
     with (root / name).open("wb") as stream:
@@ -251,9 +249,7 @@ def test_read_past_end_returns_a_coherent_empty_range(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(("start", "maximum"), [(-1, 5), (0, 0), (0, 1_001)])
-def test_read_rejects_invalid_windows(
-    tmp_path: Path, start: int, maximum: int
-) -> None:
+def test_read_rejects_invalid_windows(tmp_path: Path, start: int, maximum: int) -> None:
     root = tmp_path / "root"
     root.mkdir()
     (root / "note.txt").write_text("text")

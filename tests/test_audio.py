@@ -76,9 +76,7 @@ def make_catalog(tmp_path: Path) -> Callable[..., tuple[AudioCatalog, Path, Meta
 def test_search_supports_each_audio_format(
     make_catalog: Callable[..., tuple[AudioCatalog, Path, MetadataLoader]], suffix: str
 ) -> None:
-    catalog, _, _ = make_catalog(
-        {f"Artist/Track{suffix.upper()}": audio({"title": ["The Song"]})}
-    )
+    catalog, _, _ = make_catalog({f"Artist/Track{suffix.upper()}": audio({"title": ["The Song"]})})
 
     result = catalog.search("the song", turn_number=1)
 

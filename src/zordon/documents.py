@@ -171,9 +171,7 @@ class DocumentService:
                 "document_format_unsupported",
                 "The requested file is not a supported document format.",
             )
-        source_limit = (
-            _TEXT_SOURCE_LIMIT if suffix in {".txt", ".md"} else _BINARY_SOURCE_LIMIT
-        )
+        source_limit = _TEXT_SOURCE_LIMIT if suffix in {".txt", ".md"} else _BINARY_SOURCE_LIMIT
         if file.size > source_limit:
             raise DocumentError(
                 "document_too_large",
@@ -253,10 +251,7 @@ def _extract_docx(path: Path) -> str:
         document = Document(str(path))
         parts = [paragraph.text for paragraph in document.paragraphs]
         parts.extend(
-            cell.text
-            for table in document.tables
-            for row in table.rows
-            for cell in row.cells
+            cell.text for table in document.tables for row in table.rows for cell in row.cells
         )
         return "\n".join(parts)
     except (OSError, ValueError, KeyError) as exc:
@@ -283,9 +278,7 @@ def _score(
     lines = body.splitlines()
     title_index = next((index for index, line in enumerate(lines) if line.strip()), None)
     first_line = lines[title_index].strip() if title_index is not None else ""
-    searchable_body = "\n".join(
-        line for index, line in enumerate(lines) if index != title_index
-    )
+    searchable_body = "\n".join(line for index, line in enumerate(lines) if index != title_index)
     if phrase in searchable_body:
         return 100.0
     if phrase in filename:

@@ -5,6 +5,8 @@ time. Tier 2 adds safe local tools for date/time, decimal calculations,
 approved documents, audio metadata, and managed playback while retaining the
 streaming text conversation and process-local history from Tier 1.
 
+Licensed under the MIT License. See `LICENSE`.
+
 ## Requirements
 
 - Windows
@@ -35,8 +37,16 @@ key from the official page, then save the file. Paste the key only into the
 text editor, never into a PowerShell command, so it does not enter PowerShell
 command history. Never commit `.env` or share its contents.
 
-Zordon can also read `ZORDON_MODEL` and
-`ZORDON_REQUEST_TIMEOUT_SECONDS` from the environment.
+Zordon can also read `ZORDON_MODEL`, `ZORDON_REQUEST_TIMEOUT_SECONDS`,
+`ZORDON_HISTORY_MESSAGE_LIMIT`, and `ZORDON_OUTPUT_TOKEN_LIMIT` from the
+environment. `ZORDON_REASONING_EFFORT` accepts `low`, `medium`, `high`, or
+`xhigh`. History is bounded to complete conversation turns; the defaults retain
+40 messages, cap each model response at 2,048 output tokens, and use medium
+reasoning effort.
+
+For troubleshooting, set `ZORDON_DEBUG_LOG=logs/zordon-debug.jsonl`. This
+opt-in log contains timestamps, event names, counts, and durations only. It
+does not record prompts, responses, API keys, raw exceptions, or tracebacks.
 
 ## Approve local folders
 
@@ -94,10 +104,16 @@ Playback is stopped and released on exit, EOF, Ctrl+C, or terminal failure.
 ## Automated checks
 
 ```powershell
-python -m pytest -q
+python -m pytest --cov=zordon --cov-branch --cov-report=term-missing --cov-report=xml
+python -m ruff check src tests
+python -m ruff format --check src tests
+python -m pyright
 python -m compileall -q src tests
 python -c "from zordon.application import build_application; from zordon.tools.registry import ToolRegistry; print('Zordon imports OK')"
 ```
+
+The test command prints line and branch coverage and writes `coverage.xml`.
+Windows CI uploads that report as the `tier-1-coverage` artifact.
 
 ## Tier 1 live verification
 
@@ -127,3 +143,6 @@ Run these checks on the Windows laptop after automated verification passes:
 
 Tier 2 is accepted only after the automated checks, whole-branch security
 review, all ten Windows checks, and user approval pass.
+
+The dated automated and live-verification status is recorded in
+`docs/verification/tier-1-approval.md`.

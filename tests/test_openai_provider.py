@@ -1,6 +1,6 @@
 import json
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, assert_type
 
 import httpx
 import pytest
@@ -11,9 +11,12 @@ from openai import (
     AuthenticationError,
     RateLimitError,
 )
+from openai.types.responses import ResponseInputParam
+from openai.types.shared_params import Reasoning
 
 from zordon.agent import Agent
 from zordon.messages import Message, ToolCallItem, ToolResultItem
+from zordon.providers import openai_provider
 from zordon.providers.base import (
     ProviderError,
     ResponseCompleted,
@@ -125,6 +128,21 @@ def make_provider(
     )
 
 
+def test_sdk_payload_builders_preserve_request_shapes() -> None:
+    response_input = openai_provider._build_response_input(
+        [Message(role="user", content="Hi"), Message(role="assistant", content="Hello")]
+    )
+    reasoning = openai_provider._build_reasoning("high")
+
+    assert_type(response_input, ResponseInputParam)
+    assert_type(reasoning, Reasoning)
+    assert response_input == [
+        {"role": "user", "content": "Hi"},
+        {"role": "assistant", "content": "Hello"},
+    ]
+    assert reasoning == {"effort": "high"}
+
+
 def test_maps_model_items_and_strict_tool_definitions() -> None:
     provider, responses = make_provider([event("response.completed")])
     result = {
@@ -165,6 +183,8 @@ def test_maps_model_items_and_strict_tool_definitions() -> None:
                 },
             ],
             "stream": True,
+            "max_output_tokens": 2048,
+            "reasoning": {"effort": "medium"},
             "tools": [
                 {
                     "type": "function",
@@ -278,11 +298,7 @@ def test_rejects_duplicate_call_ids() -> None:
 @pytest.mark.parametrize(
     "events",
     [
-        [
-            event(
-                "response.function_call_arguments.delta", item_id="missing", delta="{}"
-            )
-        ],
+        [event("response.function_call_arguments.delta", item_id="missing", delta="{}")],
         [
             event(
                 "response.function_call_arguments.done",
@@ -390,9 +406,7 @@ def test_rejects_semantic_events_after_completion() -> None:
         next(stream)
 
 
-@pytest.mark.parametrize(
-    "event_type", ["error", "response.failed", "response.incomplete"]
-)
+@pytest.mark.parametrize("event_type", ["error", "response.failed", "response.incomplete"])
 def test_rejects_provider_failure_events(event_type: str) -> None:
     provider, _ = make_provider([event(event_type)])
 

@@ -108,9 +108,7 @@ def _evaluate(node: ast.AST, source: str) -> Decimal:
         left = _evaluate(node.left, source)
         right = _evaluate(node.right, source)
         if isinstance(node.op, ast.Pow):
-            if right != right.to_integral_value() or not (
-                -_MAX_EXPONENT <= right <= _MAX_EXPONENT
-            ):
+            if right != right.to_integral_value() or not (-_MAX_EXPONENT <= right <= _MAX_EXPONENT):
                 raise _InvalidCalculation
             return left ** int(right)
         operation = _BINARY_OPERATORS.get(type(node.op))

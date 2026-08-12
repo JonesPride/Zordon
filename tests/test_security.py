@@ -39,7 +39,7 @@ def test_runtime_source_has_no_arbitrary_execution_or_process_escape() -> None:
     assert matches == []
 
 
-def test_runtime_source_has_no_audio_transcription_or_write_mode_open() -> None:
+def test_runtime_source_has_no_audio_transcription_or_unapproved_write_mode_open() -> None:
     sources = _python_sources()
     transcription = re.compile(
         r"audio\s*\.\s*transcriptions|transcriptions\s*\.\s*create|\bwhisper\b",
@@ -51,7 +51,9 @@ def test_runtime_source_has_no_audio_transcription_or_write_mode_open() -> None:
     )
 
     assert [path for path, source in sources.items() if transcription.search(source)] == []
-    assert [path for path, source in sources.items() if write_mode_open.search(source)] == []
+    assert [path for path, source in sources.items() if write_mode_open.search(source)] == [
+        "src/zordon/debug_logging.py"
+    ]
 
 
 def test_untrusted_document_content_remains_bounded_tool_data(tmp_path: Path) -> None:

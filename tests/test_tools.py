@@ -20,9 +20,7 @@ CONTEXT = ToolContext(turn_number=3)
 def make_add_tool(name: str = "add_numbers") -> Tool:
     def execute(arguments: dict[str, Any], context: ToolContext) -> ToolResult:
         assert context is CONTEXT
-        return ToolResult.success(
-            "calculated", {"total": arguments["left"] + arguments["right"]}
-        )
+        return ToolResult.success("calculated", {"total": arguments["left"] + arguments["right"]})
 
     return Tool(
         name=name,
@@ -58,9 +56,7 @@ def test_successful_execution_returns_predictable_result() -> None:
     result = ToolRegistry([make_add_tool()]).execute(
         "add_numbers", {"left": 4, "right": 7}, CONTEXT
     )
-    assert result == ToolResult(
-        ok=True, code="ok", summary="calculated", data={"total": 11}
-    )
+    assert result == ToolResult(ok=True, code="ok", summary="calculated", data={"total": 11})
 
 
 @pytest.mark.parametrize(

@@ -36,6 +36,7 @@ class ModelProvider(Protocol):
         system_prompt: str,
         items: Sequence[ModelItem],
         tools: Sequence[Tool],
+        max_output_tokens: int = 2048,
     ) -> Iterator[ProviderEvent]:
         """Yield provider-neutral events for one complete model response."""
         raise NotImplementedError

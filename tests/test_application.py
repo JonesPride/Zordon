@@ -13,10 +13,18 @@ from zordon.tools import Tool
 
 
 class FakeProvider:
+    def __init__(self) -> None:
+        self.output_limits: list[int] = []
+
     def stream_response(
-        self, system_prompt: str, items: Sequence[ModelItem], tools: Sequence[Tool]
+        self,
+        system_prompt: str,
+        items: Sequence[ModelItem],
+        tools: Sequence[Tool],
+        max_output_tokens: int = 2048,
     ) -> Iterator[ProviderEvent]:
         del system_prompt, items, tools
+        self.output_limits.append(max_output_tokens)
         yield TextDelta("ready")
         yield ResponseCompleted()
 
@@ -54,7 +62,8 @@ def test_build_starts_without_folders_or_vlc_and_non_playback_works() -> None:
         raise PlaybackUnavailable
 
     app = build_application(
-        settings(), provider_factory=lambda _: FakeProvider(),
+        settings(),
+        provider_factory=lambda _: FakeProvider(),
         backend_factory=unavailable_backend,
     )
 
@@ -71,10 +80,36 @@ def test_application_owns_one_shared_catalog_and_controller() -> None:
     app.close()
 
 
+def test_build_wires_hardened_provider_and_agent_controls(monkeypatch) -> None:
+    provider = FakeProvider()
+    provider_arguments: dict[str, object] = {}
+
+    def build_provider(**kwargs):
+        provider_arguments.update(kwargs)
+        return provider
+
+    monkeypatch.setattr("zordon.application.OpenAIProvider", build_provider)
+    app = build_application(
+        Settings(
+            api_key="test",
+            history_message_limit=6,
+            output_token_limit=777,
+            reasoning_effort="high",
+        )
+    )
+
+    list(app.agent.stream_turn("hello"))
+
+    assert provider_arguments["reasoning_effort"] == "high"
+    assert provider.output_limits == [777]
+    app.close()
+
+
 def test_application_close_is_idempotent() -> None:
     backend = RecordingBackend()
     app = build_application(
-        settings(), provider_factory=lambda _: FakeProvider(),
+        settings(),
+        provider_factory=lambda _: FakeProvider(),
         backend_factory=lambda: backend,
     )
     app.playback._backend = backend

@@ -24,8 +24,9 @@ class ChunkProvider:
         system_prompt: str,
         items: Sequence[ModelItem],
         tools: Sequence[Tool],
+        max_output_tokens: int = 2048,
     ) -> Iterator[ProviderEvent]:
-        del system_prompt, items, tools
+        del system_prompt, items, tools, max_output_tokens
         self.calls += 1
         yield TextDelta("Calm")
         yield TextDelta(" response")
@@ -41,8 +42,9 @@ class FailThenRecoverProvider:
         system_prompt: str,
         items: Sequence[ModelItem],
         tools: Sequence[Tool],
+        max_output_tokens: int = 2048,
     ) -> Iterator[ProviderEvent]:
-        del system_prompt, items, tools
+        del system_prompt, items, tools, max_output_tokens
         self.calls += 1
         if self.calls == 1:
             yield TextDelta("partial")
@@ -57,8 +59,9 @@ class InterruptedStreamProvider:
         system_prompt: str,
         items: Sequence[ModelItem],
         tools: Sequence[Tool],
+        max_output_tokens: int = 2048,
     ) -> Iterator[ProviderEvent]:
-        del system_prompt, items, tools
+        del system_prompt, items, tools, max_output_tokens
         yield TextDelta("partial")
         raise KeyboardInterrupt
 
@@ -69,8 +72,9 @@ class IncompleteReplyProvider:
         system_prompt: str,
         items: Sequence[ModelItem],
         tools: Sequence[Tool],
+        max_output_tokens: int = 2048,
     ) -> Iterator[ProviderEvent]:
-        del system_prompt, items, tools
+        del system_prompt, items, tools, max_output_tokens
         yield TextDelta("partial")
         raise ProviderError("The model response ended before response.completed.")
 
@@ -150,9 +154,7 @@ def test_cli_closes_application_after_keyboard_interrupt() -> None:
 def test_cli_closes_after_provider_failure_then_exit() -> None:
     app = FakeApplication(Agent(IncompleteReplyProvider()))
 
-    assert run(
-        app, input_fn=inputs("hello", "exit"), output=RecordingOutput()
-    ) == 0
+    assert run(app, input_fn=inputs("hello", "exit"), output=RecordingOutput()) == 0
     assert app.close_calls == 1
 
 

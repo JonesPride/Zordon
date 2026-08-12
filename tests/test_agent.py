@@ -25,15 +25,16 @@ from zordon.tools import Tool, ToolContext, ToolRegistry, ToolResult
 class ScriptedProvider:
     def __init__(self, batches: Sequence[Sequence[ProviderEvent | Exception]]) -> None:
         self._batches = iter(batches)
-        self.calls: list[tuple[str, tuple[ModelItem, ...], tuple[Tool, ...]]] = []
+        self.calls: list[tuple[str, tuple[ModelItem, ...], tuple[Tool, ...], int]] = []
 
     def stream_response(
         self,
         system_prompt: str,
         items: Sequence[ModelItem],
         tools: Sequence[Tool],
+        max_output_tokens: int = 2048,
     ) -> Iterator[ProviderEvent]:
-        self.calls.append((system_prompt, tuple(items), tuple(tools)))
+        self.calls.append((system_prompt, tuple(items), tuple(tools), max_output_tokens))
         for event in next(self._batches):
             if isinstance(event, Exception):
                 raise event
@@ -45,9 +46,7 @@ def make_tool(
     *,
     execute=None,
 ) -> Tool:
-    def default_execute(
-        arguments: dict[str, object], context: ToolContext
-    ) -> ToolResult:
+    def default_execute(arguments: dict[str, object], context: ToolContext) -> ToolResult:
         del context
         if calls is not None:
             calls.append(arguments)
@@ -91,9 +90,7 @@ def test_system_prompt_defines_zordon_and_current_limits() -> None:
 
 
 def test_no_tool_turn_streams_and_commits_messages() -> None:
-    provider = ScriptedProvider(
-        [completed(TextDelta("Calm"), TextDelta(" and ready."))]
-    )
+    provider = ScriptedProvider([completed(TextDelta("Calm"), TextDelta(" and ready."))])
     agent = Agent(provider)
 
     assert list(agent.stream_turn("  Hello Zordon  ")) == ["Calm", " and ready."]
@@ -143,9 +140,7 @@ def test_multiple_calls_execute_sequentially_in_model_order() -> None:
     assert list(agent.stream_turn("Use two tools")) == ["Checking. ", "Done."]
     assert seen == [{"value": 1}, {"value": 2}]
     assert agent.history[1] == Message("assistant", "Checking. ")
-    assert [
-        item.call_id for item in agent.history if isinstance(item, ToolCallItem)
-    ] == [
+    assert [item.call_id for item in agent.history if isinstance(item, ToolCallItem)] == [
         "c1",
         "c2",
     ]
@@ -221,12 +216,8 @@ def test_exact_round_and_call_limits_execute_then_force_one_final_response() -> 
     for round_number in range(MAX_TOOL_ROUNDS):
         batches.append(
             completed(
-                ToolCall(
-                    f"c{round_number * 2 + 1}", "echo", {"value": round_number * 2 + 1}
-                ),
-                ToolCall(
-                    f"c{round_number * 2 + 2}", "echo", {"value": round_number * 2 + 2}
-                ),
+                ToolCall(f"c{round_number * 2 + 1}", "echo", {"value": round_number * 2 + 1}),
+                ToolCall(f"c{round_number * 2 + 2}", "echo", {"value": round_number * 2 + 2}),
             )
         )
     batches.append(completed(TextDelta("Final answer.")))
@@ -262,8 +253,7 @@ def test_batch_crossing_call_budget_executes_none_and_returns_limit_results() ->
     limit_results = [
         item
         for item in final_items
-        if isinstance(item, ToolResultItem)
-        and item.result["code"] == "tool_limit_reached"
+        if isinstance(item, ToolResultItem) and item.result["code"] == "tool_limit_reached"
     ]
     assert [item.call_id for item in limit_results] == ["c8", "c9"]
     assert provider.calls[-1][2] == ()
@@ -289,9 +279,7 @@ def test_tool_failure_is_safe_and_rolls_back_after_visible_text() -> None:
 
 
 def test_provider_failure_rolls_back_after_visible_text() -> None:
-    provider = ScriptedProvider(
-        [[TextDelta("Partial"), ProviderError("Connection interrupted.")]]
-    )
+    provider = ScriptedProvider([[TextDelta("Partial"), ProviderError("Connection interrupted.")]])
     agent = Agent(provider)
 
     stream = agent.stream_turn("Keep this clean")
@@ -335,8 +323,7 @@ def test_blank_final_response_is_rejected_and_rolled_back() -> None:
 
 def test_forced_final_response_cannot_request_another_tool() -> None:
     batches = [
-        completed(ToolCall(f"c{i}", "echo", {"value": i}))
-        for i in range(1, MAX_TOOL_ROUNDS + 1)
+        completed(ToolCall(f"c{i}", "echo", {"value": i})) for i in range(1, MAX_TOOL_ROUNDS + 1)
     ]
     batches.append(completed(ToolCall("too_late", "echo", {"value": 5})))
     provider = ScriptedProvider(batches)
@@ -363,6 +350,46 @@ def test_later_turn_receives_prior_complete_tool_trace() -> None:
     list(agent.stream_turn("Second"))
 
     assert provider.calls[2][1] == (*first_history, Message("user", "Second"))
+
+
+def test_agent_bounds_committed_history_to_complete_turns() -> None:
+    provider = ScriptedProvider(
+        [
+            completed(TextDelta("one")),
+            completed(TextDelta("two")),
+            completed(TextDelta("three")),
+        ]
+    )
+    agent = Agent(provider, history_message_limit=4)
+
+    list(agent.stream_turn("first"))
+    list(agent.stream_turn("second"))
+    list(agent.stream_turn("third"))
+
+    assert agent.history == (
+        Message(role="user", content="second"),
+        Message(role="assistant", content="two"),
+        Message(role="user", content="third"),
+        Message(role="assistant", content="three"),
+    )
+
+
+def test_agent_passes_output_token_limit_to_every_provider_round() -> None:
+    provider = ScriptedProvider(
+        [
+            completed(ToolCall("c1", "echo", {"value": 1})),
+            completed(TextDelta("done")),
+        ]
+    )
+    agent = Agent(
+        provider,
+        ToolRegistry([make_tool()]),
+        output_token_limit=777,
+    )
+
+    list(agent.stream_turn("use the tool"))
+
+    assert [call[3] for call in provider.calls] == [777, 777]
 
 
 def test_blank_user_turn_is_rejected_without_provider_call() -> None:

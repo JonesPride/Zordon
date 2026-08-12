@@ -60,9 +60,7 @@ def make_registry(limits: Tier2Limits | None = None):
     documents = RecordingDocuments()
     audio = RecordingAudio()
     playback = RecordingPlayback()
-    registry = build_builtin_registry(
-        documents, audio, playback, limits or Tier2Limits()
-    )
+    registry = build_builtin_registry(documents, audio, playback, limits or Tier2Limits())
     return registry, documents, audio, playback
 
 
@@ -84,8 +82,16 @@ def test_registry_exposes_exact_builtins_with_strict_schemas() -> None:
     )
     assert all(tool.input_schema["additionalProperties"] is False for tool in tools)
     assert [tool.safety_class for tool in tools] == [
-        "read_only", "compute", "read_only", "read_only", "read_only",
-        "playback", "playback", "playback", "playback", "read_only",
+        "read_only",
+        "compute",
+        "read_only",
+        "read_only",
+        "read_only",
+        "playback",
+        "playback",
+        "playback",
+        "playback",
+        "read_only",
     ]
 
 
@@ -108,9 +114,7 @@ def test_adapters_delegate_and_propagate_turn_number() -> None:
     context = ToolContext(turn_number=9)
 
     registry.execute("search_documents", {"query": "notes"}, context)
-    registry.execute(
-        "read_document", {"folder_id": "docs", "relative_path": "a.txt"}, context
-    )
+    registry.execute("read_document", {"folder_id": "docs", "relative_path": "a.txt"}, context)
     registry.execute("search_audio", {"query": "song"}, context)
     registry.execute("play_audio", {"audio_id": "opaque"}, context)
     for name in ("pause_audio", "resume_audio", "stop_audio", "now_playing"):
@@ -122,7 +126,10 @@ def test_adapters_delegate_and_propagate_turn_number() -> None:
     ]
     assert audio.calls == [("song", None, None, 9)]
     assert playback.calls == [
-        ("play", "opaque", 9), ("pause",), ("resume",), ("stop",),
+        ("play", "opaque", 9),
+        ("pause",),
+        ("resume",),
+        ("stop",),
         ("now_playing",),
     ]
 

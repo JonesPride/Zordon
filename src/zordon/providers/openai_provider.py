@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from openai import (
     APIConnectionError,
@@ -13,7 +13,10 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
+from openai.types.responses import ResponseInputParam
+from openai.types.shared_params import Reasoning
 
+from zordon.config import ReasoningEffort
 from zordon.messages import Message, ModelItem, ToolCallItem, ToolResultItem
 from zordon.providers.base import (
     ProviderError,
@@ -39,9 +42,7 @@ _OUTPUT_ITEM_ADDED_EVENT = "response.output_item.added"
 _OUTPUT_ITEM_DONE_EVENT = "response.output_item.done"
 _RESPONSE_COMPLETED_EVENT = "response.completed"
 
-_INCOMPLETE_RESPONSE_MESSAGE = (
-    "The model response was incomplete or failed before it completed."
-)
+_INCOMPLETE_RESPONSE_MESSAGE = "The model response was incomplete or failed before it completed."
 
 
 @dataclass(slots=True)
@@ -54,15 +55,25 @@ class _FunctionCallState:
     output_done: bool = False
 
 
+def _build_response_input(items: Sequence[ModelItem]) -> ResponseInputParam:
+    return cast(ResponseInputParam, [_map_item(item) for item in items])
+
+
+def _build_reasoning(effort: ReasoningEffort) -> Reasoning:
+    return Reasoning(effort=effort)
+
+
 class OpenAIProvider:
     def __init__(
         self,
         api_key: str,
         model: str,
         timeout_seconds: float,
+        reasoning_effort: ReasoningEffort = "medium",
         client: Any | None = None,
     ) -> None:
         self._model = model
+        self._reasoning_effort: ReasoningEffort = reasoning_effort
         self._client = client or OpenAI(
             api_key=api_key,
             timeout=timeout_seconds,
@@ -73,12 +84,15 @@ class OpenAIProvider:
         system_prompt: str,
         items: Sequence[ModelItem],
         tools: Sequence[Tool],
+        max_output_tokens: int = 2048,
     ) -> Iterator[ProviderEvent]:
         request: dict[str, Any] = {
             "model": self._model,
             "instructions": system_prompt,
-            "input": [_map_item(item) for item in items],
+            "input": _build_response_input(items),
             "stream": True,
+            "max_output_tokens": max_output_tokens,
+            "reasoning": _build_reasoning(self._reasoning_effort),
         }
         if tools:
             request["tools"] = [_map_tool(tool) for tool in tools]
@@ -93,9 +107,7 @@ class OpenAIProvider:
                 event_type = getattr(event, "type", "")
                 if completed:
                     if _is_semantic_event(event_type):
-                        raise ProviderError(
-                            "The model emitted a response event after completion."
-                        )
+                        raise ProviderError("The model emitted a response event after completion.")
                     continue
 
                 if event_type in _VISIBLE_DELTA_EVENTS:
@@ -103,22 +115,16 @@ class OpenAIProvider:
                     if delta:
                         yield TextDelta(delta)
                 elif event_type == _OUTPUT_ITEM_ADDED_EVENT:
-                    _add_function_call(
-                        event, states, call_ids, tools_exposed=bool(tools)
-                    )
+                    _add_function_call(event, states, call_ids, tools_exposed=bool(tools))
                 elif event_type == _CALL_DELTA_EVENT:
                     state = _get_call_state(event, states)
                     if state.finalized_arguments is not None:
-                        raise ProviderError(
-                            "The model emitted tool arguments after completion."
-                        )
+                        raise ProviderError("The model emitted tool arguments after completion.")
                     state.argument_parts.append(_require_string(event, "delta"))
                 elif event_type == _CALL_ARGUMENTS_DONE_EVENT:
                     state = _get_call_state(event, states)
                     if state.finalized_arguments is not None:
-                        raise ProviderError(
-                            "The model finalized tool arguments more than once."
-                        )
+                        raise ProviderError("The model finalized tool arguments more than once.")
                     finalized = _require_string(event, "arguments")
                     if finalized != "".join(state.argument_parts):
                         raise ProviderError(
@@ -131,9 +137,7 @@ class OpenAIProvider:
                         yield call
                 elif event_type == _RESPONSE_COMPLETED_EVENT:
                     if any(not state.output_done for state in states.values()):
-                        raise ProviderError(
-                            "The model response's function call was incomplete."
-                        )
+                        raise ProviderError("The model response's function call was incomplete.")
                     completed = True
                     yield ResponseCompleted()
                 elif event_type in _FAILURE_EVENTS:
@@ -156,9 +160,7 @@ class OpenAIProvider:
                 "The model could not be reached. Check the connection and retry."
             ) from exc
         except APIError as exc:
-            raise ProviderError(
-                "The model provider returned an error. Please retry."
-            ) from exc
+            raise ProviderError("The model provider returned an error. Please retry.") from exc
         except Exception as exc:
             raise ProviderError(
                 "An unexpected model-provider error occurred. Please retry."
@@ -209,9 +211,7 @@ def _add_function_call(
     if getattr(item, "type", "") != "function_call":
         return
     if not tools_exposed:
-        raise ProviderError(
-            "The model requested a tool even though no tools were exposed."
-        )
+        raise ProviderError("The model requested a tool even though no tools were exposed.")
     item_id = _require_string(item, "id")
     call_id = _require_string(item, "call_id")
     name = _require_string(item, "name")
@@ -223,21 +223,15 @@ def _add_function_call(
     call_ids.add(call_id)
 
 
-def _get_call_state(
-    event: object, states: dict[str, _FunctionCallState]
-) -> _FunctionCallState:
+def _get_call_state(event: object, states: dict[str, _FunctionCallState]) -> _FunctionCallState:
     item_id = _require_string(event, "item_id")
     try:
         return states[item_id]
     except KeyError as exc:
-        raise ProviderError(
-            "The model referenced an unknown function-call item."
-        ) from exc
+        raise ProviderError("The model referenced an unknown function-call item.") from exc
 
 
-def _finish_function_call(
-    event: object, states: dict[str, _FunctionCallState]
-) -> ToolCall | None:
+def _finish_function_call(event: object, states: dict[str, _FunctionCallState]) -> ToolCall | None:
     item = getattr(event, "item", None)
     if getattr(item, "type", "") != "function_call":
         return None
@@ -245,9 +239,7 @@ def _finish_function_call(
     try:
         state = states[item_id]
     except KeyError as exc:
-        raise ProviderError(
-            "The model referenced an unknown function-call item."
-        ) from exc
+        raise ProviderError("The model referenced an unknown function-call item.") from exc
     if state.output_done:
         raise ProviderError("The model completed a function-call item more than once.")
     if state.finalized_arguments is None:

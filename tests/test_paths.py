@@ -35,7 +35,16 @@ def test_resolve_file_returns_safe_identity(
 
 @pytest.mark.parametrize(
     "relative_path",
-    ["", "   ", "../secret.txt", "sub/../secret.txt", "/etc/passwd", "C:\\secret.txt", "C:secret.txt", "\\\\server\\share\\file.txt"],
+    [
+        "",
+        "   ",
+        "../secret.txt",
+        "sub/../secret.txt",
+        "/etc/passwd",
+        "C:\\secret.txt",
+        "C:secret.txt",
+        "\\\\server\\share\\file.txt",
+    ],
 )
 def test_resolve_file_rejects_unsafe_path(
     approved: tuple[ApprovedFolders, Path], relative_path: str

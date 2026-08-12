@@ -159,9 +159,7 @@ def test_starting_new_audio_stops_current_audio_first(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("operation", ["play", "pause", "resume", "stop"])
-def test_backend_failures_return_safe_playback_failed(
-    tmp_path: Path, operation: str
-) -> None:
+def test_backend_failures_return_safe_playback_failed(tmp_path: Path, operation: str) -> None:
     catalog, root = make_catalog(tmp_path, ("Track.mp3",))
     audio_id = search_id(catalog, "track", 1)
     backend = RecordingBackend(fail=operation)
@@ -173,9 +171,7 @@ def test_backend_failures_return_safe_playback_failed(
             assert controller.pause().ok
         backend.fail = operation
 
-    result = getattr(controller, operation)(
-        *(audio_id, 1) if operation == "play" else ()
-    )
+    result = getattr(controller, operation)(*(audio_id, 1) if operation == "play" else ())
 
     assert result.code == "playback_failed"
     assert "private" not in result.summary
@@ -187,9 +183,7 @@ def test_unavailable_backend_returns_actionable_safe_error(tmp_path: Path) -> No
     audio_id = search_id(catalog, "track", 1)
     controller = PlaybackController(
         catalog,
-        backend_factory=lambda: (_ for _ in ()).throw(
-            PlaybackUnavailable("private DLL detail")
-        ),
+        backend_factory=lambda: (_ for _ in ()).throw(PlaybackUnavailable("private DLL detail")),
     )
 
     result = controller.play(audio_id, turn_number=1)

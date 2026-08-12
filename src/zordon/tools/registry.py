@@ -60,9 +60,7 @@ class ToolRegistry:
         except ToolExecutionError:
             raise
         except Exception as exc:
-            raise ToolExecutionError(
-                f"Tool '{tool.name}' failed during execution."
-            ) from exc
+            raise ToolExecutionError(f"Tool '{tool.name}' failed during execution.") from exc
         if not isinstance(result, ToolResult):
             raise ToolExecutionError(f"Tool '{tool.name}' returned an invalid result.")
         return result
