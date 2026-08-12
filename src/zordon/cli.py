@@ -2,21 +2,28 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
-from typing import TextIO
+from typing import Protocol, TextIO
 
 from zordon.agent import Agent
+from zordon.application import ApplicationError, build_application
 from zordon.config import ConfigurationError, load_settings
 from zordon.providers.base import ProviderError
-from zordon.providers.openai_provider import OpenAIProvider
 
 _EXIT_COMMANDS = {"/exit", "exit", "quit"}
 
 
+class ApplicationLike(Protocol):
+    agent: Agent
+
+    def close(self) -> None: ...
+
+
 def run(
-    agent: Agent,
+    app: ApplicationLike | Agent,
     input_fn: Callable[[str], str] = input,
     output: TextIO = sys.stdout,
 ) -> int:
+    agent = app if isinstance(app, Agent) else app.agent
     try:
         output.write("Zordon online. Type /exit when you're finished.\n")
         output.flush()
@@ -60,6 +67,9 @@ def run(
         output.write("\nZordon offline.\n")
         output.flush()
         return 0
+    finally:
+        if not isinstance(app, Agent):
+            app.close()
 
 
 def main() -> int:
@@ -69,12 +79,12 @@ def main() -> int:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return 2
 
-    provider = OpenAIProvider(
-        api_key=settings.api_key,
-        model=settings.model,
-        timeout_seconds=settings.timeout_seconds,
-    )
-    return run(Agent(provider))
+    try:
+        app = build_application(settings)
+    except ApplicationError as exc:
+        print(f"Startup error: {exc}", file=sys.stderr)
+        return 2
+    return run(app)
 
 
 if __name__ == "__main__":

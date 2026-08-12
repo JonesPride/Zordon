@@ -49,11 +49,13 @@ class Agent:
         self,
         provider: ModelProvider,
         registry: ToolRegistry | None = None,
+        system_prompt: str = SYSTEM_PROMPT,
     ) -> None:
         self._provider = provider
         self._registry = registry or ToolRegistry()
         self._history: list[ModelItem] = []
         self._turn_number = 0
+        self._system_prompt = system_prompt
 
     @property
     def history(self) -> tuple[ModelItem, ...]:
@@ -140,7 +142,7 @@ class Agent:
         completed = False
 
         for event in self._provider.stream_response(
-            SYSTEM_PROMPT,
+            self._system_prompt,
             candidate,
             tools,
         ):

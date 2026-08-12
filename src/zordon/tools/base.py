@@ -74,7 +74,13 @@ class ToolResult:
 class Tool:
     """A named structured-input callable with a predictable result contract."""
 
-    __slots__ = ("_description", "_execute", "_input_schema", "_name")
+    __slots__ = (
+        "_description",
+        "_execute",
+        "_input_schema",
+        "_name",
+        "_safety_class",
+    )
 
     def __init__(
         self,
@@ -82,6 +88,7 @@ class Tool:
         description: str,
         input_schema: Mapping[str, Any],
         execute: ToolExecutor,
+        safety_class: str = "read_only",
     ) -> None:
         self._name = normalize_tool_name(name)
         if not isinstance(description, str) or not description.strip():
@@ -91,6 +98,9 @@ class Tool:
         self._description = description.strip()
         self._input_schema = _validate_schema_definition(input_schema)
         self._execute = execute
+        if safety_class not in {"read_only", "compute", "playback"}:
+            raise ToolDefinitionError("Tool safety class is not supported.")
+        self._safety_class = safety_class
 
     @property
     def name(self) -> str:
@@ -103,6 +113,10 @@ class Tool:
     @property
     def input_schema(self) -> dict[str, Any]:
         return copy.deepcopy(self._input_schema)
+
+    @property
+    def safety_class(self) -> str:
+        return self._safety_class
 
     def execute(self, arguments: ToolArguments, context: ToolContext) -> ToolResult:
         return self._execute(arguments, context)

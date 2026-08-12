@@ -113,3 +113,7 @@ def _validate_value(name: str, value: Any, schema: Mapping[str, Any]) -> None:
             raise InvalidArgumentsError(f"Argument '{name}' is below the minimum.")
         if "maximum" in schema and value > schema["maximum"]:
             raise InvalidArgumentsError(f"Argument '{name}' is above the maximum.")
+    if isinstance(value, list) and "items" in schema:
+        item_schema = schema["items"]
+        for index, item in enumerate(value):
+            _validate_value(f"{name}[{index}]", item, item_schema)

@@ -1,6 +1,8 @@
 from collections.abc import Iterator, Sequence
 from io import StringIO
 
+import pytest
+
 from zordon.agent import Agent
 from zordon.cli import run
 from zordon.messages import ModelItem
@@ -96,6 +98,15 @@ class InterruptOnceOutput(RecordingOutput):
         return super().write(text)
 
 
+class FakeApplication:
+    def __init__(self, agent: Agent) -> None:
+        self.agent = agent
+        self.close_calls = 0
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
 def inputs(*values: str):
     iterator = iter(values)
 
@@ -104,6 +115,59 @@ def inputs(*values: str):
         return next(iterator)
 
     return read
+
+
+@pytest.mark.parametrize("ending", ["/exit", "exit", "quit"])
+def test_cli_always_closes_application_after_exit(ending: str) -> None:
+    app = FakeApplication(Agent(ChunkProvider()))
+
+    assert run(app, input_fn=inputs(ending), output=RecordingOutput()) == 0
+    assert app.close_calls == 1
+
+
+def test_cli_closes_application_after_eof() -> None:
+    app = FakeApplication(Agent(ChunkProvider()))
+
+    def eof(prompt: str) -> str:
+        del prompt
+        raise EOFError
+
+    assert run(app, input_fn=eof, output=RecordingOutput()) == 0
+    assert app.close_calls == 1
+
+
+def test_cli_closes_application_after_keyboard_interrupt() -> None:
+    app = FakeApplication(Agent(ChunkProvider()))
+
+    def interrupt(prompt: str) -> str:
+        del prompt
+        raise KeyboardInterrupt
+
+    assert run(app, input_fn=interrupt, output=RecordingOutput()) == 0
+    assert app.close_calls == 1
+
+
+def test_cli_closes_after_provider_failure_then_exit() -> None:
+    app = FakeApplication(Agent(IncompleteReplyProvider()))
+
+    assert run(
+        app, input_fn=inputs("hello", "exit"), output=RecordingOutput()
+    ) == 0
+    assert app.close_calls == 1
+
+
+def test_cli_closes_application_when_output_fails() -> None:
+    app = FakeApplication(Agent(ChunkProvider()))
+
+    class BrokenOutput(RecordingOutput):
+        def write(self, text: str) -> int:
+            del text
+            raise OSError("terminal unavailable")
+
+    with pytest.raises(OSError, match="terminal unavailable"):
+        run(app, output=BrokenOutput())
+
+    assert app.close_calls == 1
 
 
 def test_cli_ignores_blank_input_streams_chunks_and_exits() -> None:
