@@ -150,8 +150,14 @@ class VLCBackend:
         try:
             import vlc  # type: ignore[import-not-found]
 
-            self._instance = vlc.Instance()
-            self._player = self._instance.media_player_new()
+            instance = vlc.Instance()
+            if instance is None:
+                raise RuntimeError("VLC instance creation failed.")
+            player = instance.media_player_new()
+            if player is None:
+                raise RuntimeError("VLC player creation failed.")
+            self._instance = instance
+            self._player = player
         except Exception as exc:
             raise PlaybackUnavailable(
                 "VLC 3.x and the matching python-vlc runtime are required."
