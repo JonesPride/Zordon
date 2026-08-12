@@ -14,6 +14,8 @@ certifi==2026.7.22
     # via
     #   httpcore
     #   httpx
+coverage==7.15.4
+    # via pytest-cov
 distro==1.9.0
     # via openai
 h11==0.16.0
@@ -47,6 +49,8 @@ pygments==2.20.0
 pyright==1.1.411
     # via zordon-assistant (pyproject.toml)
 pytest==9.1.1
+    # via zordon-assistant (pyproject.toml)
+pytest-cov==7.1.0
     # via zordon-assistant (pyproject.toml)
 python-dotenv==1.2.2
     # via zordon-assistant (pyproject.toml)

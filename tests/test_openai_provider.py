@@ -57,6 +57,7 @@ def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
         api_key="test-key",
         model="gpt-5.6-terra",
         timeout_seconds=12.0,
+        reasoning_effort="high",
         client=FakeClient(responses),
     )
 
@@ -84,6 +85,7 @@ def test_adapter_maps_messages_and_yields_only_visible_text() -> None:
             ],
             "stream": True,
             "max_output_tokens": 700,
+            "reasoning": {"effort": "high"},
         }
     ]
 

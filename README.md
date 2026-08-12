@@ -37,8 +37,10 @@ command history. Never commit `.env` or share its contents.
 
 Zordon can also read `ZORDON_MODEL`, `ZORDON_REQUEST_TIMEOUT_SECONDS`,
 `ZORDON_HISTORY_MESSAGE_LIMIT`, and `ZORDON_OUTPUT_TOKEN_LIMIT` from the
-environment. History is bounded to complete conversation turns; the defaults
-retain 40 messages and cap each model response at 2,048 output tokens.
+environment. `ZORDON_REASONING_EFFORT` accepts `low`, `medium`, `high`, or
+`xhigh`. History is bounded to complete conversation turns; the defaults retain
+40 messages, cap each model response at 2,048 output tokens, and use medium
+reasoning effort.
 
 For troubleshooting, set `ZORDON_DEBUG_LOG=logs/zordon-debug.jsonl`. This
 opt-in log contains timestamps, event names, counts, and durations only. It
@@ -57,12 +59,16 @@ added because it is the dependable debugging and fallback path.
 ## Automated checks
 
 ```powershell
-python -m pytest -q
+python -m pytest --cov=zordon --cov-branch --cov-report=term-missing --cov-report=xml
 python -m ruff check src tests
+python -m ruff format --check src tests
 python -m pyright
 python -m compileall -q src tests
 python -c "from zordon.cli import main; print('Zordon import OK')"
 ```
+
+The test command prints line and branch coverage and writes `coverage.xml`.
+Windows CI uploads that report as the `tier-1-coverage` artifact.
 
 ## Tier 1 live verification
 

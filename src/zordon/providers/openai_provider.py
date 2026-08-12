@@ -12,6 +12,7 @@ from openai import (
     RateLimitError,
 )
 
+from zordon.config import ReasoningEffort
 from zordon.messages import Message
 from zordon.providers.base import ProviderError
 
@@ -32,9 +33,11 @@ class OpenAIProvider:
         api_key: str,
         model: str,
         timeout_seconds: float,
+        reasoning_effort: ReasoningEffort = "medium",
         client: Any | None = None,
     ) -> None:
         self._model = model
+        self._reasoning_effort = reasoning_effort
         self._client = client or OpenAI(
             api_key=api_key,
             timeout=timeout_seconds,
@@ -55,6 +58,7 @@ class OpenAIProvider:
                 input=payload,
                 stream=True,
                 max_output_tokens=max_output_tokens,
+                reasoning={"effort": self._reasoning_effort},
             )
             completed = False
             for event in stream:

@@ -5,6 +5,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal, cast
 
 from dotenv import load_dotenv
 
@@ -12,6 +13,9 @@ DEFAULT_MODEL = "gpt-5.6-terra"
 DEFAULT_TIMEOUT_SECONDS = 60.0
 DEFAULT_HISTORY_MESSAGE_LIMIT = 40
 DEFAULT_OUTPUT_TOKEN_LIMIT = 2048
+ReasoningEffort = Literal["low", "medium", "high", "xhigh"]
+DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium"
+_REASONING_EFFORTS = frozenset({"low", "medium", "high", "xhigh"})
 
 
 class ConfigurationError(ValueError):
@@ -25,6 +29,7 @@ class Settings:
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
     history_message_limit: int = DEFAULT_HISTORY_MESSAGE_LIMIT
     output_token_limit: int = DEFAULT_OUTPUT_TOKEN_LIMIT
+    reasoning_effort: ReasoningEffort = DEFAULT_REASONING_EFFORT
     debug_log_path: Path | None = None
 
 
@@ -85,6 +90,13 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     output_token_limit = _bounded_integer(
         environ, "ZORDON_OUTPUT_TOKEN_LIMIT", DEFAULT_OUTPUT_TOKEN_LIMIT, 1, 100_000
     )
+    raw_reasoning_effort = (
+        environ.get("ZORDON_REASONING_EFFORT", DEFAULT_REASONING_EFFORT).strip().lower()
+        or DEFAULT_REASONING_EFFORT
+    )
+    if raw_reasoning_effort not in _REASONING_EFFORTS:
+        choices = ", ".join(sorted(_REASONING_EFFORTS))
+        raise ConfigurationError(f"ZORDON_REASONING_EFFORT must be one of: {choices}.")
     raw_debug_log = environ.get("ZORDON_DEBUG_LOG", "").strip()
 
     return Settings(
@@ -93,5 +105,6 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         timeout_seconds=timeout_seconds,
         history_message_limit=history_message_limit,
         output_token_limit=output_token_limit,
+        reasoning_effort=cast(ReasoningEffort, raw_reasoning_effort),
         debug_log_path=Path(raw_debug_log).expanduser() if raw_debug_log else None,
     )

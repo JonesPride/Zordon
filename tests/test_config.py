@@ -11,6 +11,7 @@ def test_load_settings_uses_tier_one_defaults() -> None:
     assert settings.timeout_seconds == 60.0
     assert settings.history_message_limit == 40
     assert settings.output_token_limit == 2048
+    assert settings.reasoning_effort == "medium"
     assert settings.debug_log_path is None
 
 
@@ -22,6 +23,7 @@ def test_load_settings_accepts_supported_overrides() -> None:
             "ZORDON_REQUEST_TIMEOUT_SECONDS": "15.5",
             "ZORDON_HISTORY_MESSAGE_LIMIT": "12",
             "ZORDON_OUTPUT_TOKEN_LIMIT": "900",
+            "ZORDON_REASONING_EFFORT": "high",
             "ZORDON_DEBUG_LOG": "logs/zordon-debug.jsonl",
         }
     )
@@ -30,6 +32,7 @@ def test_load_settings_accepts_supported_overrides() -> None:
     assert settings.timeout_seconds == 15.5
     assert settings.history_message_limit == 12
     assert settings.output_token_limit == 900
+    assert settings.reasoning_effort == "high"
     assert str(settings.debug_log_path).endswith("logs/zordon-debug.jsonl")
 
 
@@ -47,6 +50,7 @@ def test_load_settings_accepts_supported_overrides() -> None:
         ),
         ({"OPENAI_API_KEY": "test-key", "ZORDON_HISTORY_MESSAGE_LIMIT": "3"}, "even integer"),
         ({"OPENAI_API_KEY": "test-key", "ZORDON_OUTPUT_TOKEN_LIMIT": "0"}, "between 1 and"),
+        ({"OPENAI_API_KEY": "test-key", "ZORDON_REASONING_EFFORT": "extreme"}, "one of"),
         (
             {
                 "OPENAI_API_KEY": "test-key",

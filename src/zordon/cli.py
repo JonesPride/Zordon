@@ -74,6 +74,7 @@ def main() -> int:
         api_key=settings.api_key,
         model=settings.model,
         timeout_seconds=settings.timeout_seconds,
+        reasoning_effort=settings.reasoning_effort,
     )
     return run(
         Agent(
