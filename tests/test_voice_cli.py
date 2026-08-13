@@ -92,7 +92,9 @@ def _config():
 
 
 def _audit():
-    return type("AuditStub", (), {"path": Path("test.log"), "record": lambda *args, **kwargs: None})()
+    return type(
+        "AuditStub", (), {"path": Path("test.log"), "record": lambda *args, **kwargs: None}
+    )()
 
 
 if __name__ == "__main__":

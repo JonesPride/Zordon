@@ -2,7 +2,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from zordon.logs import latest_log, list_logs, read_log_tail, search_log, summarize_events, summarize_last_turn
+from zordon.logs import (
+    latest_log,
+    list_logs,
+    read_log_tail,
+    search_log,
+    summarize_events,
+    summarize_last_turn,
+)
 
 
 class LogsTest(unittest.TestCase):
@@ -15,7 +22,9 @@ class LogsTest(unittest.TestCase):
             (logs / "ignore.txt").write_text("nope", encoding="utf-8")
 
             self.assertEqual(list_logs(root), ["zordon-2026-07-21.jsonl"])
-            self.assertEqual(read_log_tail(root, "zordon-2026-07-21.jsonl", line_count=2), "two\nthree")
+            self.assertEqual(
+                read_log_tail(root, "zordon-2026-07-21.jsonl", line_count=2), "two\nthree"
+            )
             self.assertEqual(latest_log(root), "zordon-2026-07-21.jsonl")
 
     def test_summarize_events_counts_event_names(self):
@@ -74,8 +83,12 @@ class LogsTest(unittest.TestCase):
             root = Path(temp_dir)
             logs = root / "logs"
             logs.mkdir()
-            (logs / "zordon-2026-07-20.jsonl").write_text('{"event":"user_turn","text":"Old"}\n', encoding="utf-8")
-            (logs / "zordon-2026-07-21.jsonl").write_text('{"event":"user_turn","text":"New"}\n', encoding="utf-8")
+            (logs / "zordon-2026-07-20.jsonl").write_text(
+                '{"event":"user_turn","text":"Old"}\n', encoding="utf-8"
+            )
+            (logs / "zordon-2026-07-21.jsonl").write_text(
+                '{"event":"user_turn","text":"New"}\n', encoding="utf-8"
+            )
 
             summary = summarize_last_turn(root)
 
@@ -103,7 +116,9 @@ class LogsTest(unittest.TestCase):
             root = Path(temp_dir)
             logs = root / "logs"
             logs.mkdir()
-            (logs / "zordon-2026-07-21.jsonl").write_text('{"event":"user_turn","text":"Hello"}\n', encoding="utf-8")
+            (logs / "zordon-2026-07-21.jsonl").write_text(
+                '{"event":"user_turn","text":"Hello"}\n', encoding="utf-8"
+            )
 
             output = search_log(root, "missing", "zordon-2026-07-21.jsonl")
 

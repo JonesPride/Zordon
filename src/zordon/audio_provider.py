@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 import tempfile
 import urllib.error
 import urllib.request
@@ -36,12 +35,14 @@ class OpenAIAudioProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.config.request_timeout_seconds) as response:
+            with urllib.request.urlopen(
+                request, timeout=self.config.request_timeout_seconds
+            ) as response:
                 data = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise ProviderError(f"Transcription failed ({exc.code}): {detail}") from exc
-        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+        except (urllib.error.URLError, TimeoutError) as exc:
             raise ProviderError(f"Transcription service is unreachable: {exc}") from exc
 
         return str(data.get("text", "")).strip()
@@ -64,12 +65,14 @@ class OpenAIAudioProvider:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.config.request_timeout_seconds) as response:
+            with urllib.request.urlopen(
+                request, timeout=self.config.request_timeout_seconds
+            ) as response:
                 audio = response.read()
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise ProviderError(f"Speech generation failed ({exc.code}): {detail}") from exc
-        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+        except (urllib.error.URLError, TimeoutError) as exc:
             raise ProviderError(f"Speech service is unreachable: {exc}") from exc
 
         path = Path(tempfile.gettempdir()) / "zordon-reply.wav"
@@ -85,28 +88,29 @@ def _api_key() -> str:
     return api_key
 
 
-def _multipart_body(boundary: str, fields: dict[str, str], files: dict[str, tuple[str, str, bytes]]) -> bytes:
+def _multipart_body(
+    boundary: str, fields: dict[str, str], files: dict[str, tuple[str, str, bytes]]
+) -> bytes:
     lines: list[bytes] = []
     for name, value in fields.items():
         lines.extend(
             [
-                f"--{boundary}\r\n".encode("utf-8"),
-                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
-                f"{value}\r\n".encode("utf-8"),
+                f"--{boundary}\r\n".encode(),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode(),
+                f"{value}\r\n".encode(),
             ]
         )
     for name, (filename, content_type, content) in files.items():
         lines.extend(
             [
-                f"--{boundary}\r\n".encode("utf-8"),
+                f"--{boundary}\r\n".encode(),
                 (
-                    f'Content-Disposition: form-data; name="{name}"; '
-                    f'filename="{filename}"\r\n'
-                ).encode("utf-8"),
-                f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+                    f'Content-Disposition: form-data; name="{name}"; filename="{filename}"\r\n'
+                ).encode(),
+                f"Content-Type: {content_type}\r\n\r\n".encode(),
                 content,
                 b"\r\n",
             ]
         )
-    lines.append(f"--{boundary}--\r\n".encode("utf-8"))
+    lines.append(f"--{boundary}--\r\n".encode())
     return b"".join(lines)

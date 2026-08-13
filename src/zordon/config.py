@@ -109,6 +109,7 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         debug_log_path=Path(raw_debug_log).expanduser() if raw_debug_log else None,
     )
 
+
 # Compatibility surface for migrated voice-agent modules.
 # Keep this additive so the newer Settings/load_settings API continues to work.
 

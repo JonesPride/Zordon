@@ -40,9 +40,7 @@ class MemoryStore:
             created_at=datetime.now(UTC).isoformat(),
         )
         self._entries = [
-            existing
-            for existing in self._entries
-            if existing.key.lower() != key.lower()
+            existing for existing in self._entries if existing.key.lower() != key.lower()
         ]
         self._entries.append(memory)
         if self.path is None:
@@ -58,9 +56,7 @@ class MemoryStore:
         key = _required_text(key, "key")
         original_count = len(self._entries)
         self._entries = [
-            existing
-            for existing in self._entries
-            if existing.key.lower() != key.lower()
+            existing for existing in self._entries if existing.key.lower() != key.lower()
         ]
         removed = len(self._entries) != original_count
         if removed:
@@ -74,10 +70,7 @@ class MemoryStore:
         return "\n".join(memory.as_model_text() for memory in entries)
 
     def raw_lines(self) -> list[str]:
-        return [
-            json.dumps(_memory_to_dict(memory), ensure_ascii=True)
-            for memory in self._entries
-        ]
+        return [json.dumps(_memory_to_dict(memory), ensure_ascii=True) for memory in self._entries]
 
     def _load(self) -> list[Memory]:
         if self.path is None or not self.path.exists():

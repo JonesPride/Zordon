@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-import socket
 import urllib.error
 import urllib.request
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Protocol
+from typing import Protocol
 
 from zordon.config import Config
 from zordon.providers.base import ProviderError
@@ -86,7 +86,7 @@ class OpenAIProvider:
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise ProviderError(f"OpenAI request failed ({exc.code}): {detail}") from exc
-        except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+        except (urllib.error.URLError, TimeoutError) as exc:
             raise ProviderError(f"OpenAI is unreachable right now: {exc}") from exc
 
     def _read_sse(self, response) -> Iterable[str]:

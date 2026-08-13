@@ -27,7 +27,9 @@ class ToolsTest(unittest.TestCase):
             self.assertFalse(blocked.ok)
             self.assertIn("requires confirmation", blocked.output)
             self.assertTrue(saved.ok)
-            self.assertEqual((root / "drafts" / "idea.md").read_text(encoding="utf-8"), "Opening hook.")
+            self.assertEqual(
+                (root / "drafts" / "idea.md").read_text(encoding="utf-8"), "Opening hook."
+            )
 
     def test_save_draft_rejects_path_traversal(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -70,7 +72,9 @@ class ToolsTest(unittest.TestCase):
             self.assertTrue(saved.ok)
             self.assertIn("Project: Green Campaign", saved.output)
             self.assertEqual(
-                (root / "projects" / "green-campaign" / "drafts" / "idea.md").read_text(encoding="utf-8"),
+                (root / "projects" / "green-campaign" / "drafts" / "idea.md").read_text(
+                    encoding="utf-8"
+                ),
                 "Project hook.",
             )
             self.assertFalse((root / "drafts" / "idea.md").exists())
@@ -93,7 +97,9 @@ class ToolsTest(unittest.TestCase):
 
             self.assertTrue(saved.ok)
             self.assertIn("Project: Green Campaign", saved.output)
-            self.assertTrue((root / "projects" / "green-campaign" / "images" / "cover.png").exists())
+            self.assertTrue(
+                (root / "projects" / "green-campaign" / "images" / "cover.png").exists()
+            )
 
 
 def _config() -> Config:

@@ -1,25 +1,33 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import platform
+from dataclasses import dataclass
+from pathlib import Path
 
+from . import __status__, __version__
 from .agent import Agent
 from .audit import AuditLog
 from .config import Config
 from .doctor import doctor_text
-from .drafts import delete_draft, drafts_dir, list_drafts, read_draft, read_latest_draft, safe_draft_filename
+from .drafts import (
+    delete_draft,
+    drafts_dir,
+    list_drafts,
+    read_draft,
+    read_latest_draft,
+    safe_draft_filename,
+)
 from .heartbeat import build_pulse
 from .images import images_dir, latest_image, list_images, open_image
 from .logs import list_logs, read_log_tail, search_log, summarize_events, summarize_last_turn
 from .memory import MemoryStore
 from .projects import (
     active_project,
+    content_plan_path,
     copy_draft_to_active_project,
     copy_image_to_active_project,
     create_project,
-    content_plan_path,
     format_active_project,
     format_projects,
     latest_project_draft,
@@ -37,7 +45,6 @@ from .projects import (
     write_project_brief,
 )
 from .state import open_path, open_state_folder, state_text
-from . import __status__, __version__
 
 
 def help_text() -> str:
@@ -159,7 +166,9 @@ class CommandRouter:
             return CommandOutcome(handled=True, output=state_text(self.context.root))
         if lowered in {"/open-state", "/open state"}:
             self.pending_open_state = True
-            return CommandOutcome(handled=True, output="Open Zordon state folder? Say Confirm Or Deny.")
+            return CommandOutcome(
+                handled=True, output="Open Zordon state folder? Say Confirm Or Deny."
+            )
         if user_text == "/setup-voice":
             return CommandOutcome(handled=True, output=setup_voice_text(self.context.root))
         if user_text == "/reset":
@@ -192,9 +201,17 @@ class CommandRouter:
             return CommandOutcome(handled=True, output=self._project_drafts())
         if lowered in {"/project-images", "/project images"}:
             return CommandOutcome(handled=True, output=self._project_images())
-        if lowered in {"/open-project-drafts", "/open project drafts", "/open project draft folder"}:
+        if lowered in {
+            "/open-project-drafts",
+            "/open project drafts",
+            "/open project draft folder",
+        }:
             return CommandOutcome(handled=True, output=self._stage_open_project_drafts())
-        if lowered in {"/open-project-images", "/open project images", "/open project image folder"}:
+        if lowered in {
+            "/open-project-images",
+            "/open project images",
+            "/open project image folder",
+        }:
             return CommandOutcome(handled=True, output=self._stage_open_project_images())
         if lowered in {"/save-latest-draft-to-project", "/save latest draft to project"}:
             return CommandOutcome(handled=True, output=self._save_latest_draft_to_project())
@@ -235,7 +252,10 @@ class CommandRouter:
                 output="\n".join(drafts) if drafts else "No drafts saved yet.",
             )
         if lowered in {"/open-drafts", "/open drafts", "/open-draft-folder", "/open draft folder"}:
-            return CommandOutcome(handled=True, output=self._stage_open_path("drafts folder", drafts_dir(self.context.root), True))
+            return CommandOutcome(
+                handled=True,
+                output=self._stage_open_path("drafts folder", drafts_dir(self.context.root), True),
+            )
         if lowered in {"/latest-draft", "/latest-drafts", "/latest draft", "/latest drafts"}:
             return CommandOutcome(handled=True, output=self._latest_draft())
         if lowered in {"/open-latest-draft", "/open latest draft", "/open latest drafts"}:
@@ -251,10 +271,18 @@ class CommandRouter:
                 output="\n".join(images) if images else "No images saved yet.",
             )
         if lowered in {"/open-images", "/open images", "/open-image-folder", "/open image folder"}:
-            return CommandOutcome(handled=True, output=self._stage_open_path("images folder", images_dir(self.context.root), True))
+            return CommandOutcome(
+                handled=True,
+                output=self._stage_open_path("images folder", images_dir(self.context.root), True),
+            )
         if lowered in {"/latest-image", "/latest-images", "/latest image", "/latest images"}:
             return CommandOutcome(handled=True, output=self._latest_image())
-        if lowered in {"/open-latest-image", "/open latest image", "/open-latest-images", "/open latest images"}:
+        if lowered in {
+            "/open-latest-image",
+            "/open latest image",
+            "/open-latest-images",
+            "/open latest images",
+        }:
             return CommandOutcome(handled=True, output=self._stage_open_latest_image())
         if user_text == "/logs":
             logs = list_logs(self.context.root)
@@ -263,7 +291,10 @@ class CommandRouter:
                 output="\n".join(logs) if logs else "No audit logs saved yet.",
             )
         if lowered in {"/open-logs", "/open logs", "/open-log-folder", "/open log folder"}:
-            return CommandOutcome(handled=True, output=self._stage_open_path("logs folder", self.context.root / "logs", True))
+            return CommandOutcome(
+                handled=True,
+                output=self._stage_open_path("logs folder", self.context.root / "logs", True),
+            )
         if user_text.startswith("/show-log"):
             return CommandOutcome(handled=True, output=self._show_log(user_text))
         if user_text.startswith("/events"):
@@ -281,7 +312,10 @@ class CommandRouter:
         if lowered in {"/open-memory", "/open memory", "/open memory file"}:
             if self.context.memory.path is None:
                 return CommandOutcome(handled=True, output="No memory file is configured.")
-            return CommandOutcome(handled=True, output=self._stage_open_path("memory file", self.context.memory.path, False))
+            return CommandOutcome(
+                handled=True,
+                output=self._stage_open_path("memory file", self.context.memory.path, False),
+            )
         if user_text == "/memory --raw":
             raw_lines = self.context.memory.raw_lines()
             return CommandOutcome(
@@ -394,7 +428,9 @@ class CommandRouter:
 
     def _ready(self) -> str:
         tool_count = len(self.context.agent.tools.names())
-        state_status = "durable" if "location: durable" in state_text(self.context.root) else "check state"
+        state_status = (
+            "durable" if "location: durable" in state_text(self.context.root) else "check state"
+        )
         return "\n".join(
             [
                 "Zordon ready",

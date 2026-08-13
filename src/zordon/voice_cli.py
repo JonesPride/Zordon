@@ -5,11 +5,12 @@ import re
 import time
 
 from .agent import Agent
-from .audit import default_audit_log
 from .audio_io import AudioError, cue_sound, record_while_key_held
 from .audio_provider import OpenAIAudioProvider
+from .audit import default_audit_log
 from .commands import CommandContext, CommandRouter
-from .config import ROOT, ROOT as CONFIG_ROOT, load_config, load_dotenv, state_root
+from .config import ROOT, load_config, load_dotenv, state_root
+from .config import ROOT as CONFIG_ROOT
 from .memory import default_memory_store
 from .openai_provider import OpenAIProvider, ProviderError
 
@@ -427,7 +428,10 @@ def _looks_like_latest_draft(text: str) -> bool:
     for prefix in prefixes:
         if text.startswith(prefix + " "):
             requested = text.removeprefix(prefix).strip()
-            return requested.startswith("latest ") and requested.removeprefix("latest ").strip() in draft_words
+            return (
+                requested.startswith("latest ")
+                and requested.removeprefix("latest ").strip() in draft_words
+            )
     return False
 
 

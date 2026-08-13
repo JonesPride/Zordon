@@ -43,20 +43,46 @@ class VoiceCommandNormalizationTest(unittest.TestCase):
         self.assertEqual(normalize_spoken_command("Slash projects"), "/projects")
         self.assertEqual(normalize_spoken_command("Flash projects"), "/projects")
         self.assertEqual(normalize_spoken_command("Slash open project"), "/open-project")
-        self.assertEqual(normalize_spoken_command("New project, Zordon Mixtape."), "/new-project zordon mixtape")
-        self.assertEqual(normalize_spoken_command("New project Zordon Mixtape"), "/new-project zordon mixtape")
-        self.assertEqual(normalize_spoken_command("Use project Zordon Mixtape"), "/use-project zordon mixtape")
+        self.assertEqual(
+            normalize_spoken_command("New project, Zordon Mixtape."), "/new-project zordon mixtape"
+        )
+        self.assertEqual(
+            normalize_spoken_command("New project Zordon Mixtape"), "/new-project zordon mixtape"
+        )
+        self.assertEqual(
+            normalize_spoken_command("Use project Zordon Mixtape"), "/use-project zordon mixtape"
+        )
         self.assertEqual(normalize_spoken_command("Slash project drafts"), "/project-drafts")
-        self.assertEqual(normalize_spoken_command("Slash open project drafts"), "/open-project-drafts")
-        self.assertEqual(normalize_spoken_command("Slash save latest draft to project"), "/save-latest-draft-to-project")
-        self.assertEqual(normalize_spoken_command("Slash open latest project draft"), "/open-latest-project-draft")
+        self.assertEqual(
+            normalize_spoken_command("Slash open project drafts"), "/open-project-drafts"
+        )
+        self.assertEqual(
+            normalize_spoken_command("Slash save latest draft to project"),
+            "/save-latest-draft-to-project",
+        )
+        self.assertEqual(
+            normalize_spoken_command("Slash open latest project draft"),
+            "/open-latest-project-draft",
+        )
         self.assertEqual(normalize_spoken_command("Slash project images"), "/project-images")
-        self.assertEqual(normalize_spoken_command("Slash open project images"), "/open-project-images")
-        self.assertEqual(normalize_spoken_command("Slash save latest image to project"), "/save-latest-image-to-project")
-        self.assertEqual(normalize_spoken_command("Slash open latest project image"), "/open-latest-project-image")
+        self.assertEqual(
+            normalize_spoken_command("Slash open project images"), "/open-project-images"
+        )
+        self.assertEqual(
+            normalize_spoken_command("Slash save latest image to project"),
+            "/save-latest-image-to-project",
+        )
+        self.assertEqual(
+            normalize_spoken_command("Slash open latest project image"),
+            "/open-latest-project-image",
+        )
         self.assertEqual(normalize_spoken_command("Slash project brief"), "/project-brief")
-        self.assertEqual(normalize_spoken_command("Slash open project brief"), "/open-project-brief")
-        self.assertEqual(normalize_spoken_command("Slash project brief next"), "/project-brief-next")
+        self.assertEqual(
+            normalize_spoken_command("Slash open project brief"), "/open-project-brief"
+        )
+        self.assertEqual(
+            normalize_spoken_command("Slash project brief next"), "/project-brief-next"
+        )
         self.assertEqual(normalize_spoken_command("Slashprojectbriefnext"), "/project-brief-next")
         self.assertEqual(normalize_spoken_command("Project brief next"), "/project-brief-next")
         self.assertEqual(normalize_spoken_command("Slash content plan"), "/content-plan")
@@ -70,7 +96,9 @@ class VoiceCommandNormalizationTest(unittest.TestCase):
         self.assertEqual(normalize_spoken_command("Slashprojectnext"), "/project-next")
         self.assertEqual(normalize_spoken_command("Project next"), "/project-next")
         self.assertEqual(
-            normalize_spoken_command("Set project brief Zordon Mixtape is a green sci-fi music project."),
+            normalize_spoken_command(
+                "Set project brief Zordon Mixtape is a green sci-fi music project."
+            ),
             "/set-project-brief zordon mixtape is a green sci-fi music project",
         )
         self.assertEqual(normalize_spoken_command("Slash doctor"), "/doctor")
@@ -91,7 +119,9 @@ class VoiceCommandNormalizationTest(unittest.TestCase):
             normalize_spoken_command("Save this as a draft Zordon is voice working."),
             "Save this as a draft Zordon is voice working.",
         )
-        self.assertEqual(normalize_spoken_command("Tell me about giraffes"), "Tell me about giraffes")
+        self.assertEqual(
+            normalize_spoken_command("Tell me about giraffes"), "Tell me about giraffes"
+        )
 
 
 if __name__ == "__main__":

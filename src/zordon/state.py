@@ -11,7 +11,6 @@ from .drafts import drafts_dir
 from .images import images_dir
 from .logs import logs_dir
 
-
 STATE_DIRS = ("data", "drafts", "images", "logs")
 
 

@@ -4,14 +4,13 @@ import base64
 import json
 import os
 import re
-import socket
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .config import Config, ROOT, state_root
+from .config import ROOT, Config, state_root
 from .openai_provider import ProviderError
 
 
@@ -90,7 +89,7 @@ def generate_image(
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise ProviderError(f"Image generation failed ({exc.code}): {detail}") from exc
-    except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+    except (urllib.error.URLError, TimeoutError) as exc:
         raise ProviderError(f"Image generation service is unreachable: {exc}") from exc
 
     item = data.get("data", [{}])[0]
@@ -119,7 +118,9 @@ def _safe_image_filename(filename: str) -> str:
     if not filename.lower().endswith(".png"):
         filename += ".png"
     if not re.match(r"^[A-Za-z0-9._ -]+$", filename):
-        raise ValueError("filename can only contain letters, numbers, spaces, dots, underscores, and hyphens")
+        raise ValueError(
+            "filename can only contain letters, numbers, spaces, dots, underscores, and hyphens"
+        )
     return filename
 
 

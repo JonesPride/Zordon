@@ -18,9 +18,7 @@ def list_logs(root: Path) -> list[str]:
     if not directory.exists():
         return []
     return sorted(
-        path.name
-        for path in directory.iterdir()
-        if path.is_file() and path.suffix == ".jsonl"
+        path.name for path in directory.iterdir() if path.is_file() and path.suffix == ".jsonl"
     )
 
 
@@ -147,7 +145,9 @@ def safe_log_filename(filename: str) -> str:
     if not filename.endswith(".jsonl"):
         raise ValueError("filename must end in .jsonl")
     if not re.match(r"^[A-Za-z0-9._ -]+$", filename):
-        raise ValueError("filename can only contain letters, numbers, spaces, dots, underscores, and hyphens")
+        raise ValueError(
+            "filename can only contain letters, numbers, spaces, dots, underscores, and hyphens"
+        )
     return filename
 
 

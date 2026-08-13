@@ -204,7 +204,9 @@ class CommandsTest(unittest.TestCase):
             (drafts / "today.md").write_text("Draft.", encoding="utf-8")
             (images / "today.png").write_bytes(b"png")
             log_path = logs / "zordon-today.jsonl"
-            log_path.write_text('{"event":"user_turn"}\n{"event":"assistant_reply"}\n', encoding="utf-8")
+            log_path.write_text(
+                '{"event":"user_turn"}\n{"event":"assistant_reply"}\n', encoding="utf-8"
+            )
             audit = AuditLog(path=log_path)
             memory = MemoryStore(entries=[])
             memory.remember("favorite_color", "green", "manual")
@@ -252,7 +254,9 @@ class CommandsTest(unittest.TestCase):
             switched = router.handle("/use-project green-campaign")
             switched_without_the = router.handle("/use-project the green-campaign")
             staged = router.handle("/open-project")
-            with patch("zordon.commands.open_path", return_value=root / "projects" / "green-campaign") as open_path:
+            with patch(
+                "zordon.commands.open_path", return_value=root / "projects" / "green-campaign"
+            ) as open_path:
                 confirmed = router.handle("confirm")
 
         self.assertIn("Created project Green Campaign (green-campaign).", created.output)
@@ -261,7 +265,9 @@ class CommandsTest(unittest.TestCase):
         self.assertIn("Using project Green Campaign (green-campaign).", switched.output)
         self.assertIn("Using project Green Campaign (green-campaign).", switched_without_the.output)
         self.assertEqual(staged.output, "Open project folder? Say Confirm Or Deny.")
-        open_path.assert_called_once_with(root / "projects" / "green-campaign", create_directory=True)
+        open_path.assert_called_once_with(
+            root / "projects" / "green-campaign", create_directory=True
+        )
         self.assertIn("Opened project folder", confirmed.output)
 
     def test_router_copies_and_opens_project_drafts(self):
@@ -277,19 +283,31 @@ class CommandsTest(unittest.TestCase):
             saved = router.handle("/save-latest-draft-to-project")
             listed = router.handle("/project-drafts")
             staged_folder = router.handle("/open-project-drafts")
-            with patch("zordon.commands.open_path", return_value=root / "projects" / "green-campaign" / "drafts") as open_path:
+            with patch(
+                "zordon.commands.open_path",
+                return_value=root / "projects" / "green-campaign" / "drafts",
+            ) as open_path:
                 confirmed_folder = router.handle("confirm")
             staged_file = router.handle("/open-latest-project-draft")
-            with patch("zordon.commands.open_path", return_value=root / "projects" / "green-campaign" / "drafts" / "global.md") as open_path_file:
+            with patch(
+                "zordon.commands.open_path",
+                return_value=root / "projects" / "green-campaign" / "drafts" / "global.md",
+            ) as open_path_file:
                 confirmed_file = router.handle("confirm")
 
         self.assertIn("Saved latest draft to project: global.md.", saved.output)
         self.assertIn("global.md", listed.output)
         self.assertEqual(staged_folder.output, "Open project drafts folder? Say Confirm Or Deny.")
-        open_path.assert_called_once_with(root / "projects" / "green-campaign" / "drafts", create_directory=True)
+        open_path.assert_called_once_with(
+            root / "projects" / "green-campaign" / "drafts", create_directory=True
+        )
         self.assertIn("Opened project drafts folder", confirmed_folder.output)
-        self.assertEqual(staged_file.output, "Open latest project draft global.md? Say Confirm Or Deny.")
-        open_path_file.assert_called_once_with(root / "projects" / "green-campaign" / "drafts" / "global.md", create_directory=False)
+        self.assertEqual(
+            staged_file.output, "Open latest project draft global.md? Say Confirm Or Deny."
+        )
+        open_path_file.assert_called_once_with(
+            root / "projects" / "green-campaign" / "drafts" / "global.md", create_directory=False
+        )
         self.assertIn("Opened latest project draft", confirmed_file.output)
 
     def test_router_copies_and_opens_project_images(self):
@@ -305,19 +323,31 @@ class CommandsTest(unittest.TestCase):
             saved = router.handle("/save-latest-image-to-project")
             listed = router.handle("/project-images")
             staged_folder = router.handle("/open-project-images")
-            with patch("zordon.commands.open_path", return_value=root / "projects" / "green-campaign" / "images") as open_path:
+            with patch(
+                "zordon.commands.open_path",
+                return_value=root / "projects" / "green-campaign" / "images",
+            ) as open_path:
                 confirmed_folder = router.handle("confirm")
             staged_file = router.handle("/open-latest-project-image")
-            with patch("zordon.commands.open_path", return_value=root / "projects" / "green-campaign" / "images" / "cover.png") as open_path_file:
+            with patch(
+                "zordon.commands.open_path",
+                return_value=root / "projects" / "green-campaign" / "images" / "cover.png",
+            ) as open_path_file:
                 confirmed_file = router.handle("confirm")
 
         self.assertIn("Saved latest image to project: cover.png.", saved.output)
         self.assertIn("cover.png", listed.output)
         self.assertEqual(staged_folder.output, "Open project images folder? Say Confirm Or Deny.")
-        open_path.assert_called_once_with(root / "projects" / "green-campaign" / "images", create_directory=True)
+        open_path.assert_called_once_with(
+            root / "projects" / "green-campaign" / "images", create_directory=True
+        )
         self.assertIn("Opened project images folder", confirmed_folder.output)
-        self.assertEqual(staged_file.output, "Open latest project image cover.png? Say Confirm Or Deny.")
-        open_path_file.assert_called_once_with(root / "projects" / "green-campaign" / "images" / "cover.png", create_directory=False)
+        self.assertEqual(
+            staged_file.output, "Open latest project image cover.png? Say Confirm Or Deny."
+        )
+        open_path_file.assert_called_once_with(
+            root / "projects" / "green-campaign" / "images" / "cover.png", create_directory=False
+        )
         self.assertIn("Opened latest project image", confirmed_file.output)
 
     def test_router_sets_shows_and_opens_project_brief(self):
@@ -330,7 +360,10 @@ class CommandsTest(unittest.TestCase):
             saved = router.handle("/set-project-brief A calm green campaign for launch content.")
             shown = router.handle("/project brief")
             staged = router.handle("/open-project-brief")
-            with patch("zordon.commands.open_path", return_value=root / "projects" / "green-campaign" / "brief.md") as open_path:
+            with patch(
+                "zordon.commands.open_path",
+                return_value=root / "projects" / "green-campaign" / "brief.md",
+            ) as open_path:
                 confirmed = router.handle("confirm")
 
         self.assertIn("No project brief saved yet.", empty.output)
@@ -338,7 +371,9 @@ class CommandsTest(unittest.TestCase):
         self.assertIn("Project brief: Green Campaign", shown.output)
         self.assertIn("A calm green campaign", shown.output)
         self.assertEqual(staged.output, "Open project brief? Say Confirm Or Deny.")
-        open_path.assert_called_once_with(root / "projects" / "green-campaign" / "brief.md", create_directory=False)
+        open_path.assert_called_once_with(
+            root / "projects" / "green-campaign" / "brief.md", create_directory=False
+        )
         self.assertIn("Opened project brief", confirmed.output)
 
     def test_router_reports_project_status(self):
@@ -393,7 +428,9 @@ class CommandsTest(unittest.TestCase):
         self.assertIn("Calm green launch content", plan.output)
         self.assertIn("latest draft: intro.md", plan.output.lower())
         self.assertIn("latest image: cover.png", plan.output.lower())
-        self.assertEqual(staged_save.output, "Save content plan to content-plan.md? Say Confirm Or Deny.")
+        self.assertEqual(
+            staged_save.output, "Save content plan to content-plan.md? Say Confirm Or Deny."
+        )
         self.assertTrue(saved_exists)
         self.assertIn("Content plan: Green Campaign", saved_content)
         self.assertIn(f"Saved content plan to {saved_path}.", confirmed_save.output)
@@ -441,7 +478,9 @@ class CommandsTest(unittest.TestCase):
 
             outcome = router.handle("/project brief next")
 
-        self.assertEqual(outcome.output, "No project brief saved yet. Use /set-project-brief <text> first.")
+        self.assertEqual(
+            outcome.output, "No project brief saved yet. Use /set-project-brief <text> first."
+        )
 
     def test_router_project_next_requires_brief_first(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -485,7 +524,9 @@ class CommandsTest(unittest.TestCase):
 
         self.assertIn("Project next", outcome.output)
         self.assertIn("project: Green Campaign", outcome.output)
-        self.assertIn("action: Turn intro.md and cover.png into one publishable post.", outcome.output)
+        self.assertIn(
+            "action: Turn intro.md and cover.png into one publishable post.", outcome.output
+        )
         self.assertIn("command: Say: Refine this into a social post.", outcome.output)
 
     def test_router_reports_recent_turns(self):
@@ -683,7 +724,9 @@ class CommandsTest(unittest.TestCase):
         outcome = _router().handle("/search-log")
 
         self.assertTrue(outcome.handled)
-        self.assertEqual(outcome.output, "Usage: /search-log <term> or /search-log <filename> <term>")
+        self.assertEqual(
+            outcome.output, "Usage: /search-log <term> or /search-log <filename> <term>"
+        )
 
     def test_router_show_log_requires_filename(self):
         outcome = _router().handle("/show-log")
@@ -692,7 +735,9 @@ class CommandsTest(unittest.TestCase):
         self.assertEqual(outcome.output, "Usage: /show-log <filename>")
 
 
-def _router(root: Path | None = None, audit: AuditLog | None = None, memory: MemoryStore | None = None) -> CommandRouter:
+def _router(
+    root: Path | None = None, audit: AuditLog | None = None, memory: MemoryStore | None = None
+) -> CommandRouter:
     root = root or Path(".")
     config = Config(
         assistant_name="Zordon",

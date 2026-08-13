@@ -4,17 +4,17 @@ import json
 import re
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Callable
 
 from .config import ROOT
-from .drafts import safe_draft_filename, save_draft as write_draft
+from .drafts import safe_draft_filename
+from .drafts import save_draft as write_draft
 from .images import generate_image as create_image_file
 from .memory import MemoryStore
 from .projects import active_project, project_drafts_dir, project_images_dir
-
 
 ToolHandler = Callable[[dict], str]
 
@@ -78,7 +78,9 @@ class ToolRegistry:
             return ToolResult(name=name, ok=False, output=str(exc))
 
 
-def default_registry(memory: MemoryStore | None = None, root: Path = ROOT, config=None) -> ToolRegistry:
+def default_registry(
+    memory: MemoryStore | None = None, root: Path = ROOT, config=None
+) -> ToolRegistry:
     tools = [
         Tool(
             name="refine_writing",

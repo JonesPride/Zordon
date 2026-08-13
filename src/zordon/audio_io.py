@@ -80,20 +80,17 @@ def play_wav(path: Path, interrupt_key: str | None = None) -> bool:
 
     # Stream audio in small chunks instead of loading entire file
     chunk_size = 1024  # frames per chunk
-    
+
     with wave.open(str(path), "rb") as handle:
         sample_rate = handle.getframerate()
         channels = handle.getnchannels()
-        
+
         interrupted = False
-        
+
         if interrupt_key is None:
             # Non-interruptible playback - stream and play
             with sd.OutputStream(
-                samplerate=sample_rate,
-                channels=channels,
-                dtype='int16',
-                blocksize=chunk_size
+                samplerate=sample_rate, channels=channels, dtype="int16", blocksize=chunk_size
             ) as stream:
                 while True:
                     data = handle.readframes(chunk_size)
@@ -107,33 +104,30 @@ def play_wav(path: Path, interrupt_key: str | None = None) -> bool:
         else:
             # Interruptible playback
             import keyboard
-            
+
             # First, get total duration
             total_frames = handle.getnframes()
-            duration_seconds = total_frames / sample_rate
-            
-            started = time.perf_counter()
-            
+            total_frames / sample_rate
+
+            time.perf_counter()
+
             with sd.OutputStream(
-                samplerate=sample_rate,
-                channels=channels,
-                dtype='int16',
-                blocksize=chunk_size
+                samplerate=sample_rate, channels=channels, dtype="int16", blocksize=chunk_size
             ) as stream:
                 while True:
                     data = handle.readframes(chunk_size)
                     if not data:
                         break
-                    
+
                     # Check for interrupt
                     if keyboard.is_pressed(interrupt_key):
                         sd.stop()
                         interrupted = True
                         break
-                    
+
                     audio_chunk = np.frombuffer(data, dtype=np.int16)
                     if channels > 1:
                         audio_chunk = audio_chunk.reshape(-1, channels)
                     stream.write(audio_chunk)
-            
+
             return interrupted

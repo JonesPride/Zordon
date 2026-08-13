@@ -46,13 +46,19 @@ def doctor_text(config: Config, memory: MemoryStore, tools: ToolRegistry, root: 
 def _check_api_key() -> Check:
     if os.getenv("OPENAI_API_KEY"):
         return Check("OPENAI_API_KEY", True, "set")
-    return Check("OPENAI_API_KEY", False, "not set; model, transcription, and speech calls will fail")
+    return Check(
+        "OPENAI_API_KEY", False, "not set; model, transcription, and speech calls will fail"
+    )
 
 
 def _check_state_root(root: Path) -> Check:
     actual_root = state_root() if root == ROOT else root
     if is_temp_state_root(actual_root):
-        return Check("state", False, f"using temporary storage at {actual_root}; set ZORDON_STATE_DIR or use AppData")
+        return Check(
+            "state",
+            False,
+            f"using temporary storage at {actual_root}; set ZORDON_STATE_DIR or use AppData",
+        )
     return Check("state", True, f"durable storage at {actual_root}")
 
 
@@ -72,7 +78,9 @@ def _check_config(config: Config) -> Check:
     if missing:
         return Check("config", False, f"missing values: {', '.join(missing)}")
     if config.audio_sample_rate <= 0 or config.request_timeout_seconds <= 0:
-        return Check("config", False, "audio_sample_rate and request_timeout_seconds must be positive")
+        return Check(
+            "config", False, "audio_sample_rate and request_timeout_seconds must be positive"
+        )
     return Check("config", True, f"{config.assistant_name} using {config.model}")
 
 

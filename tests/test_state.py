@@ -20,7 +20,10 @@ class StateTest(unittest.TestCase):
         self.assertIn("logs folder:", text)
 
     def test_migrate_state_copies_known_runtime_folders(self):
-        with tempfile.TemporaryDirectory() as source_dir, tempfile.TemporaryDirectory() as target_dir:
+        with (
+            tempfile.TemporaryDirectory() as source_dir,
+            tempfile.TemporaryDirectory() as target_dir,
+        ):
             source = Path(source_dir)
             target = Path(target_dir)
             (source / "data").mkdir()

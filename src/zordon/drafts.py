@@ -41,9 +41,7 @@ def latest_draft(root: Path) -> Path:
         raise FileNotFoundError("No drafts saved yet.")
 
     drafts = [
-        path
-        for path in directory.iterdir()
-        if path.is_file() and path.suffix in {".txt", ".md"}
+        path for path in directory.iterdir() if path.is_file() and path.suffix in {".txt", ".md"}
     ]
     if not drafts:
         raise FileNotFoundError("No drafts saved yet.")
@@ -85,7 +83,9 @@ def safe_draft_filename(filename: str) -> str:
     if not filename.endswith((".txt", ".md")):
         raise ValueError("filename must end in .txt or .md")
     if not re.match(r"^[A-Za-z0-9._ -]+$", filename):
-        raise ValueError("filename can only contain letters, numbers, spaces, dots, underscores, and hyphens")
+        raise ValueError(
+            "filename can only contain letters, numbers, spaces, dots, underscores, and hyphens"
+        )
     return filename
 
 

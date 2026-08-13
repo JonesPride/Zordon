@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-import shutil
 
 
 @dataclass(frozen=True)
@@ -232,9 +232,7 @@ def latest_project_draft(root: Path) -> Path:
     if not directory.exists():
         raise FileNotFoundError("No project drafts saved yet.")
     drafts = [
-        path
-        for path in directory.iterdir()
-        if path.is_file() and path.suffix in {".txt", ".md"}
+        path for path in directory.iterdir() if path.is_file() and path.suffix in {".txt", ".md"}
     ]
     if not drafts:
         raise FileNotFoundError("No project drafts saved yet.")
