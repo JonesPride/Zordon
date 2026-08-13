@@ -5,8 +5,6 @@ import time
 import wave
 from pathlib import Path
 
-import numpy as np
-
 
 class AudioError(RuntimeError):
     pass
@@ -31,6 +29,7 @@ def cue_sound(kind: str) -> None:
 def record_while_key_held(key: str, sample_rate: int) -> Path:
     try:
         import keyboard
+        import numpy as np
         import sounddevice as sd
     except ImportError as exc:
         raise AudioError("Install sounddevice and keyboard to use push-to-talk.") from exc
@@ -74,6 +73,7 @@ def record_while_key_held(key: str, sample_rate: int) -> Path:
 
 def play_wav(path: Path, interrupt_key: str | None = None) -> bool:
     try:
+        import numpy as np
         import sounddevice as sd
     except ImportError as exc:
         raise AudioError("Install sounddevice to play speech audio.") from exc
