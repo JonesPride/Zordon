@@ -108,3 +108,106 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         reasoning_effort=cast(ReasoningEffort, raw_reasoning_effort),
         debug_log_path=Path(raw_debug_log).expanduser() if raw_debug_log else None,
     )
+
+
+# Compatibility surface for migrated voice-agent modules.
+# Keep this additive so the newer Settings/load_settings API continues to work.
+
+import json
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+@dataclass(frozen=True, slots=True)
+class Config:
+    assistant_name: str
+    model: str
+    transcription_model: str
+    tts_model: str
+    tts_voice: str
+    push_to_talk_key: str
+    audio_sample_rate: int
+    temperature: float
+    request_timeout_seconds: int
+    image_model: str = "gpt-image-1"
+    image_size: str = "1024x1024"
+    image_quality: str = "low"
+
+
+def state_root() -> Path:
+    configured = os.getenv("ZORDON_STATE_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+
+    for candidate in state_root_candidates():
+        if _can_write_to(candidate):
+            return candidate
+
+    return Path(tempfile.gettempdir()) / "Zordon"
+
+
+def state_root_candidates() -> list[Path]:
+    candidates: list[Path] = []
+
+    appdata = os.getenv("APPDATA", "").strip()
+    if appdata:
+        candidates.append(Path(appdata) / "Zordon")
+
+    local_appdata = os.getenv("LOCALAPPDATA", "").strip()
+    if local_appdata:
+        candidates.append(Path(local_appdata) / "Zordon")
+
+    candidates.append(ROOT)
+    return candidates
+
+
+def is_temp_state_root(path: Path) -> bool:
+    try:
+        path.resolve().relative_to(Path(tempfile.gettempdir()).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _can_write_to(directory: Path) -> bool:
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        probe = directory / ".zordon-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def load_config(path: Path = ROOT / "config.json") -> Config:
+    data = {}
+    if path.exists():
+        data = json.loads(path.read_text(encoding="utf-8"))
+
+    settings = None
+    try:
+        settings = load_settings()
+    except ConfigurationError:
+        pass
+
+    return Config(
+        assistant_name=data.get("assistant_name", "Zordon"),
+        model=data.get("model", settings.model if settings else DEFAULT_MODEL),
+        image_model=data.get("image_model", "gpt-image-1"),
+        image_size=data.get("image_size", "1024x1024"),
+        image_quality=data.get("image_quality", "low"),
+        transcription_model=data.get("transcription_model", "gpt-4o-transcribe"),
+        tts_model=data.get("tts_model", "gpt-4o-mini-tts"),
+        tts_voice=data.get("tts_voice", "verse"),
+        push_to_talk_key=data.get("push_to_talk_key", "space"),
+        audio_sample_rate=int(data.get("audio_sample_rate", 16000)),
+        temperature=float(data.get("temperature", 0.7)),
+        request_timeout_seconds=int(
+            data.get(
+                "request_timeout_seconds",
+                settings.timeout_seconds if settings else DEFAULT_TIMEOUT_SECONDS,
+            )
+        ),
+    )

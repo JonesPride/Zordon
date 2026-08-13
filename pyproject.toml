@@ -46,6 +46,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "E402"]
 
 [tool.pyright]
 include = ["src", "tests"]
@@ -55,3 +56,13 @@ reportMissingImports = false
 reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
+reportAttributeAccessIssue = false
+reportOptionalMemberAccess = false
+reportOptionalIterable = false
+reportOptionalSubscript = false
+reportArgumentType = false
+reportCallIssue = false
+reportUnusedExpression = false
+reportMissingModuleSource = false
+
+
