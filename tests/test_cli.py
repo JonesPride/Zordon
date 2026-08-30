@@ -53,6 +53,47 @@ class IncompleteReplyProvider:
         raise ProviderError("The model response ended before response.completed.")
 
 
+class FakeCommand:
+    handled = True
+    output = "Zordon doctor: ok"
+    should_exit = False
+
+
+class FakeUnhandledCommand:
+    handled = False
+    output = ""
+    should_exit = False
+
+
+class FakeRouter:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def handle(self, user_text: str) -> FakeCommand:
+        self.calls.append(user_text)
+        return FakeCommand()
+
+
+class FakeUnhandledRouter:
+    def handle(self, user_text: str) -> FakeUnhandledCommand:
+        del user_text
+        return FakeUnhandledCommand()
+
+
+class FullAgent:
+    def __init__(self) -> None:
+        self.respond_calls: list[str] = []
+
+    def respond(self, user_text: str) -> Iterator[str]:
+        self.respond_calls.append(user_text)
+        yield "Full"
+        yield " response"
+
+    def stream_turn(self, user_text: str) -> Iterator[str]:
+        del user_text
+        raise AssertionError("full agent should use respond()")
+
+
 class RecordingOutput(StringIO):
     def __init__(self) -> None:
         super().__init__()
@@ -103,6 +144,40 @@ def test_cli_ignores_blank_input_streams_chunks_and_exits() -> None:
     assert "Zordon: Calm response" in rendered
     assert "Zordon offline" in rendered
     assert output.flush_count >= 3
+
+
+def test_cli_handles_local_command_without_calling_provider() -> None:
+    provider = ChunkProvider()
+    router = FakeRouter()
+    output = RecordingOutput()
+
+    exit_code = run(
+        Agent(provider),
+        input_fn=inputs("/doctor", "/exit"),
+        output=output,
+        router=router,
+    )
+
+    assert exit_code == 0
+    assert provider.calls == 0
+    assert router.calls == ["/doctor"]
+    assert "Zordon: Zordon doctor: ok" in output.getvalue()
+
+
+def test_cli_uses_full_agent_respond_after_router_miss() -> None:
+    agent = FullAgent()
+    output = RecordingOutput()
+
+    exit_code = run(
+        agent,
+        input_fn=inputs("Write the first draft", "/exit"),
+        output=output,
+        router=FakeUnhandledRouter(),
+    )
+
+    assert exit_code == 0
+    assert agent.respond_calls == ["Write the first draft"]
+    assert "Zordon: Full response" in output.getvalue()
 
 
 def test_cli_labels_partial_failure_and_accepts_the_next_turn() -> None:
