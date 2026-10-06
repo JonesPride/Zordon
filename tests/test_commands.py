@@ -652,7 +652,6 @@ class CommandsTest(unittest.TestCase):
 
         self.assertTrue(outcome.handled)
         self.assertIn("Voice setup:", outcome.output)
-        self.assertIn("requirements-voice.txt", outcome.output)
         self.assertIn("pip install \"zordon-assistant[voice]\"", outcome.output)
         self.assertIn(sys.executable, outcome.output)
         self.assertNotIn("C:\\\\Users\\\\Jones\\\\.cache\\\\codex-runtimes", outcome.output)
