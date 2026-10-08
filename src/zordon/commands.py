@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import platform
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -936,15 +937,13 @@ def commands_text() -> str:
 
 
 def setup_voice_text(root: Path) -> str:
-    requirements = root / "requirements-voice.txt"
+    del root  # Voice dependencies are declared by the installed package, not the state root.
+    python_executable = Path(sys.executable)
     return "\n".join(
         [
             "Voice setup:",
             "Install push-to-talk dependencies with:",
-            (
-                "& 'C:\\Users\\Jones\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe' "
-                f"-m pip install -r '{requirements}'"
-            ),
+            f'& "{python_executable}" -m pip install "zordon-assistant[voice]"',
             "Then run /doctor to confirm sounddevice and keyboard are available.",
         ]
     )

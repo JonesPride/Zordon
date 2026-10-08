@@ -1,3 +1,4 @@
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -651,8 +652,9 @@ class CommandsTest(unittest.TestCase):
 
         self.assertTrue(outcome.handled)
         self.assertIn("Voice setup:", outcome.output)
-        self.assertIn("requirements-voice.txt", outcome.output)
-        self.assertIn("pip install -r", outcome.output)
+        self.assertIn("pip install \"zordon-assistant[voice]\"", outcome.output)
+        self.assertIn(sys.executable, outcome.output)
+        self.assertNotIn("C:\\\\Users\\\\Jones\\\\.cache\\\\codex-runtimes", outcome.output)
 
     def test_router_lists_and_shows_logs(self):
         with tempfile.TemporaryDirectory() as temp_dir:

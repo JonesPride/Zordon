@@ -15,6 +15,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+voice = [
+    "keyboard>=0.13.5,<1.0",
+    "numpy>=2.0,<3.0",
+    "sounddevice>=0.5,<1.0",
+]
 dev = [
     "pyright>=1.1.400,<2.0",
     "pytest>=8.0,<10.0",
