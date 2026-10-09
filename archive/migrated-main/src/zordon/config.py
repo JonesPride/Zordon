@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import os
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,26 +16,10 @@ DEFAULT_OUTPUT_TOKEN_LIMIT = 2048
 ReasoningEffort = Literal["low", "medium", "high", "xhigh"]
 DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium"
 _REASONING_EFFORTS = frozenset({"low", "medium", "high", "xhigh"})
-_FOLDER_KEY_PREFIX = "ZORDON_FOLDER_"
-_FOLDER_SUFFIX_PATTERN = re.compile(r"[A-Z][A-Z0-9_]{0,31}")
 
 
 class ConfigurationError(ValueError):
     """Raised when Zordon cannot start safely from its configuration."""
-
-
-@dataclass(frozen=True, slots=True)
-class Tier2Limits:
-    document_scan: int = 5_000
-    audio_scan: int = 20_000
-    search_results: int = 10
-    document_read_chars: int = 12_000
-
-
-@dataclass(frozen=True, slots=True)
-class ApprovedRoot:
-    folder_id: str
-    path: Path = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,8 +31,6 @@ class Settings:
     output_token_limit: int = DEFAULT_OUTPUT_TOKEN_LIMIT
     reasoning_effort: ReasoningEffort = DEFAULT_REASONING_EFFORT
     debug_log_path: Path | None = None
-    approved_roots: tuple[ApprovedRoot, ...] = ()
-    tier2_limits: Tier2Limits = Tier2Limits()
 
 
 def _bounded_integer(
@@ -118,18 +99,6 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         raise ConfigurationError(f"ZORDON_REASONING_EFFORT must be one of: {choices}.")
     raw_debug_log = environ.get("ZORDON_DEBUG_LOG", "").strip()
 
-    approved_roots = _parse_approved_roots(environ)
-    tier2_limits = Tier2Limits(
-        document_scan=_parse_bounded_integer(
-            environ, "ZORDON_DOCUMENT_SCAN_LIMIT", 5_000, 100, 50_000
-        ),
-        audio_scan=_parse_bounded_integer(environ, "ZORDON_AUDIO_SCAN_LIMIT", 20_000, 100, 100_000),
-        search_results=_parse_bounded_integer(environ, "ZORDON_SEARCH_RESULT_LIMIT", 10, 1, 25),
-        document_read_chars=_parse_bounded_integer(
-            environ, "ZORDON_DOCUMENT_READ_CHARS", 12_000, 1_000, 20_000
-        ),
-    )
-
     return Settings(
         api_key=api_key,
         model=model,
@@ -138,63 +107,107 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         output_token_limit=output_token_limit,
         reasoning_effort=cast(ReasoningEffort, raw_reasoning_effort),
         debug_log_path=Path(raw_debug_log).expanduser() if raw_debug_log else None,
-        approved_roots=approved_roots,
-        tier2_limits=tier2_limits,
     )
 
 
-def _parse_approved_roots(environ: Mapping[str, str]) -> tuple[ApprovedRoot, ...]:
-    roots: list[ApprovedRoot] = []
-    seen_ids: set[str] = set()
-    seen_paths: set[str] = set()
-    for key, raw_path in sorted(environ.items(), key=lambda item: item[0].casefold()):
-        if not key.startswith(_FOLDER_KEY_PREFIX):
-            continue
-        suffix = key.removeprefix(_FOLDER_KEY_PREFIX)
-        if _FOLDER_SUFFIX_PATTERN.fullmatch(suffix) is None:
-            raise ConfigurationError(
-                f"{key} is not a valid approved folder setting. Use "
-                "ZORDON_FOLDER_ followed by an uppercase letter, then uppercase "
-                "letters, digits, or underscores."
-            )
-        folder_id = suffix.lower()
-        if folder_id in seen_ids:
-            raise ConfigurationError(f"Duplicate approved folder ID '{folder_id}'.")
-        try:
-            path = Path(raw_path).expanduser().resolve(strict=True)
-        except (OSError, RuntimeError) as exc:
-            raise ConfigurationError(
-                f"The approved folder '{folder_id}' does not exist or cannot be resolved."
-            ) from exc
-        if not path.is_dir():
-            raise ConfigurationError(
-                f"The approved folder '{folder_id}' must refer to a directory."
-            )
-        canonical = os.path.normcase(str(path))
-        if canonical in seen_paths:
-            raise ConfigurationError(
-                f"Multiple settings refer to the same approved folder ('{folder_id}')."
-            )
-        seen_ids.add(folder_id)
-        seen_paths.add(canonical)
-        roots.append(ApprovedRoot(folder_id, path))
-    return tuple(roots)
+# Compatibility surface for migrated voice-agent modules.
+# Keep this additive so the newer Settings/load_settings API continues to work.
+
+import json
+import tempfile
+
+ROOT = Path(__file__).resolve().parents[2]
 
 
-def _parse_bounded_integer(
-    environ: Mapping[str, str],
-    key: str,
-    default: int,
-    minimum: int,
-    maximum: int,
-) -> int:
-    raw_value = environ.get(key, str(default)).strip() or str(default)
+@dataclass(frozen=True, slots=True)
+class Config:
+    assistant_name: str
+    model: str
+    transcription_model: str
+    tts_model: str
+    tts_voice: str
+    push_to_talk_key: str
+    audio_sample_rate: int
+    temperature: float
+    request_timeout_seconds: int
+    image_model: str = "gpt-image-1"
+    image_size: str = "1024x1024"
+    image_quality: str = "low"
+
+
+def state_root() -> Path:
+    configured = os.getenv("ZORDON_STATE_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+
+    for candidate in state_root_candidates():
+        if _can_write_to(candidate):
+            return candidate
+
+    return Path(tempfile.gettempdir()) / "Zordon"
+
+
+def state_root_candidates() -> list[Path]:
+    candidates: list[Path] = []
+
+    appdata = os.getenv("APPDATA", "").strip()
+    if appdata:
+        candidates.append(Path(appdata) / "Zordon")
+
+    local_appdata = os.getenv("LOCALAPPDATA", "").strip()
+    if local_appdata:
+        candidates.append(Path(local_appdata) / "Zordon")
+
+    candidates.append(ROOT)
+    return candidates
+
+
+def is_temp_state_root(path: Path) -> bool:
     try:
-        value = int(raw_value)
-    except ValueError as exc:
-        raise ConfigurationError(
-            f"{key} must be an integer from {minimum} through {maximum}."
-        ) from exc
-    if not minimum <= value <= maximum:
-        raise ConfigurationError(f"{key} must be an integer from {minimum} through {maximum}.")
-    return value
+        path.resolve().relative_to(Path(tempfile.gettempdir()).resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _can_write_to(directory: Path) -> bool:
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        probe = directory / ".zordon-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def load_config(path: Path = ROOT / "config.json") -> Config:
+    data = {}
+    if path.exists():
+        data = json.loads(path.read_text(encoding="utf-8"))
+
+    settings = None
+    try:
+        settings = load_settings()
+    except ConfigurationError:
+        pass
+
+    return Config(
+        assistant_name=data.get("assistant_name", "Zordon"),
+        model=data.get("model", settings.model if settings else DEFAULT_MODEL),
+        image_model=data.get("image_model", "gpt-image-1"),
+        image_size=data.get("image_size", "1024x1024"),
+        image_quality=data.get("image_quality", "low"),
+        transcription_model=data.get("transcription_model", "gpt-4o-transcribe"),
+        tts_model=data.get("tts_model", "gpt-4o-mini-tts"),
+        tts_voice=data.get("tts_voice", "verse"),
+        push_to_talk_key=data.get("push_to_talk_key", "space"),
+        audio_sample_rate=int(data.get("audio_sample_rate", 16000)),
+        temperature=float(data.get("temperature", 0.7)),
+        request_timeout_seconds=int(
+            data.get(
+                "request_timeout_seconds",
+                settings.timeout_seconds if settings else DEFAULT_TIMEOUT_SECONDS,
+            )
+        ),
+    )

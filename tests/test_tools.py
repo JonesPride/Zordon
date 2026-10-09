@@ -1,149 +1,223 @@
-import tempfile
-import unittest
-from pathlib import Path
-from unittest.mock import patch
+from typing import Any
 
-from zordon.config import Config
-from zordon.projects import create_project
-from zordon.tools import default_registry
+import pytest
 
+from zordon.tools import (
+    DuplicateToolError,
+    InvalidArgumentsError,
+    Tool,
+    ToolContext,
+    ToolDefinitionError,
+    ToolExecutionError,
+    ToolRegistry,
+    ToolResult,
+    UnknownToolError,
+)
 
-class ToolsTest(unittest.TestCase):
-    def test_save_draft_requires_confirmation_and_writes_after_approval(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            tools = default_registry(root=root)
-
-            blocked = tools.execute(
-                "save_draft",
-                {"filename": "idea.md", "content": "Opening hook."},
-            )
-            saved = tools.execute(
-                "save_draft",
-                {"filename": "idea.md", "content": "Opening hook."},
-                confirmed=True,
-            )
-
-            self.assertFalse(blocked.ok)
-            self.assertIn("requires confirmation", blocked.output)
-            self.assertTrue(saved.ok)
-            self.assertEqual(
-                (root / "drafts" / "idea.md").read_text(encoding="utf-8"), "Opening hook."
-            )
-
-    def test_save_draft_rejects_path_traversal(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            tools = default_registry(root=Path(temp_dir))
-
-            result = tools.execute(
-                "save_draft",
-                {"filename": "..\\outside.md", "content": "Nope."},
-                confirmed=True,
-            )
-
-            self.assertFalse(result.ok)
-            self.assertIn("path separators", result.output)
-
-    def test_save_draft_rejects_unsupported_extension(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            tools = default_registry(root=Path(temp_dir))
-
-            result = tools.execute(
-                "save_draft",
-                {"filename": "idea.exe", "content": "Nope."},
-                confirmed=True,
-            )
-
-            self.assertFalse(result.ok)
-            self.assertIn(".txt or .md", result.output)
-
-    def test_save_draft_writes_to_active_project_when_set(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            create_project(root, "Green Campaign")
-            tools = default_registry(root=root)
-
-            saved = tools.execute(
-                "save_draft",
-                {"filename": "idea.md", "content": "Project hook."},
-                confirmed=True,
-            )
-
-            self.assertTrue(saved.ok)
-            self.assertIn("Project: Green Campaign", saved.output)
-            self.assertEqual(
-                (root / "projects" / "green-campaign" / "drafts" / "idea.md").read_text(
-                    encoding="utf-8"
-                ),
-                "Project hook.",
-            )
-            self.assertFalse((root / "drafts" / "idea.md").exists())
-
-    def test_generate_image_writes_to_active_project_when_set(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            create_project(root, "Green Campaign")
-            tools = default_registry(root=root, config=_config())
-
-            with (
-                patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}),
-                patch("urllib.request.urlopen", return_value=_fake_image_response()),
-            ):
-                saved = tools.execute(
-                    "generate_image",
-                    {"filename": "cover.png", "prompt": "A green cover"},
-                    confirmed=True,
-                )
-
-            self.assertTrue(saved.ok)
-            self.assertIn("Project: Green Campaign", saved.output)
-            self.assertTrue(
-                (root / "projects" / "green-campaign" / "images" / "cover.png").exists()
-            )
+CONTEXT = ToolContext(turn_number=3)
 
 
-def _config() -> Config:
-    return Config(
-        assistant_name="Zordon",
-        model="test-model",
-        transcription_model="test-transcribe",
-        tts_model="test-tts",
-        tts_voice="verse",
-        push_to_talk_key="space",
-        audio_sample_rate=16000,
-        temperature=0.7,
-        request_timeout_seconds=5,
-        image_model="test-image",
-        image_size="1024x1024",
-        image_quality="low",
+def make_add_tool(name: str = "add_numbers") -> Tool:
+    def execute(arguments: dict[str, Any], context: ToolContext) -> ToolResult:
+        assert context is CONTEXT
+        return ToolResult.success("calculated", {"total": arguments["left"] + arguments["right"]})
+
+    return Tool(
+        name=name,
+        description="Add two integers.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "left": {"type": "integer"},
+                "right": {"type": "integer"},
+            },
+            "required": ["left", "right"],
+            "additionalProperties": False,
+        },
+        execute=execute,
     )
 
 
-def _fake_image_response():
-    import base64
-    import json
+def test_register_lookup_and_list_tools() -> None:
+    registry = ToolRegistry()
+    tool = make_add_tool()
+    registry.register(tool)
 
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            return False
-
-        def read(self):
-            return json.dumps(
-                {
-                    "data": [
-                        {
-                            "b64_json": base64.b64encode(b"png-bytes").decode("ascii"),
-                            "revised_prompt": "revised",
-                        }
-                    ]
-                }
-            ).encode("utf-8")
-
-    return FakeResponse()
+    assert registry.get("add_numbers") is tool
+    assert registry.list_tools() == (tool,)
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_tool_names_are_normalized_consistently() -> None:
+    registry = ToolRegistry([make_add_tool("  ADD_NUMBERS  ")])
+    assert registry.get(" Add_Numbers ").name == "add_numbers"
+
+
+def test_successful_execution_returns_predictable_result() -> None:
+    result = ToolRegistry([make_add_tool()]).execute(
+        "add_numbers", {"left": 4, "right": 7}, CONTEXT
+    )
+    assert result == ToolResult(ok=True, code="ok", summary="calculated", data={"total": 11})
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({"left": 1}, "missing required"),
+        ({"left": 1, "right": 2, "extra": 3}, "unexpected argument"),
+        ({"left": "1", "right": 2}, "must be an integer"),
+    ],
+)
+def test_argument_validation(arguments: dict[str, Any], message: str) -> None:
+    registry = ToolRegistry([make_add_tool()])
+    with pytest.raises(InvalidArgumentsError, match=message):
+        registry.execute("add_numbers", arguments, CONTEXT)
+
+
+def test_arguments_must_be_a_mapping() -> None:
+    with pytest.raises(InvalidArgumentsError, match="object"):
+        ToolRegistry([make_add_tool()]).execute(
+            "add_numbers",
+            [],  # type: ignore[arg-type]
+            CONTEXT,
+        )
+
+
+def test_optional_null_uses_tool_default_but_required_and_unknown_null_are_rejected() -> None:
+    tool = Tool(
+        "optional_limit",
+        "Use an optional limit.",
+        {
+            "type": "object",
+            "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        lambda arguments, context: ToolResult.success("ok", {"limit": arguments.get("limit", 10)}),
+    )
+    registry = ToolRegistry([tool])
+    assert registry.execute(tool.name, {"query": "hi", "limit": None}, CONTEXT).data == {
+        "limit": 10
+    }
+    with pytest.raises(InvalidArgumentsError, match="string"):
+        registry.execute(tool.name, {"query": None}, CONTEXT)
+    with pytest.raises(InvalidArgumentsError, match="unexpected"):
+        registry.execute(tool.name, {"query": "hi", "extra": None}, CONTEXT)
+
+
+def test_duplicate_registration_is_rejected_after_normalization() -> None:
+    registry = ToolRegistry([make_add_tool()])
+    with pytest.raises(DuplicateToolError, match="add_numbers"):
+        registry.register(make_add_tool("ADD_NUMBERS"))
+
+
+def test_unknown_lookup_and_execution_are_safe_errors() -> None:
+    registry = ToolRegistry()
+    with pytest.raises(UnknownToolError, match="not registered"):
+        registry.get("missing")
+    with pytest.raises(UnknownToolError, match="not registered"):
+        registry.execute("missing", {}, CONTEXT)
+
+
+@pytest.mark.parametrize("name", ["", "two words", "bad-name", "9starts_wrong"])
+def test_invalid_tool_names_are_rejected(name: str) -> None:
+    with pytest.raises(ToolDefinitionError, match="name"):
+        make_add_tool(name)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"description": ""},
+        {"input_schema": {"type": "array"}},
+        {
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": ["missing"],
+                "additionalProperties": False,
+            }
+        },
+        {"execute": None},
+    ],
+)
+def test_invalid_tool_definitions_are_rejected(changes: dict[str, Any]) -> None:
+    values: dict[str, Any] = {
+        "name": "valid_tool",
+        "description": "Valid description.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+        "execute": lambda arguments, context: ToolResult.success("done"),
+    }
+    values.update(changes)
+    with pytest.raises(ToolDefinitionError):
+        Tool(**values)
+
+
+def test_normal_exception_is_wrapped_without_internal_details() -> None:
+    def explode(arguments: dict[str, Any], context: ToolContext) -> ToolResult:
+        del arguments, context
+        raise RuntimeError("database password and traceback detail")
+
+    tool = Tool(
+        "explode",
+        "Raise an internal exception.",
+        {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+        explode,
+    )
+
+    with pytest.raises(ToolExecutionError) as error:
+        ToolRegistry([tool]).execute("explode", {}, CONTEXT)
+
+    assert "database password" not in str(error.value)
+    assert str(error.value) == "Tool 'explode' failed during execution."
+
+
+def test_invalid_executor_result_is_wrapped_predictably() -> None:
+    tool = Tool(
+        "invalid_result",
+        "Return the wrong result type.",
+        {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+        lambda arguments, context: "wrong",  # type: ignore[arg-type,return-value]
+    )
+    with pytest.raises(ToolExecutionError, match="invalid result"):
+        ToolRegistry([tool]).execute("invalid_result", {}, CONTEXT)
+
+
+def test_model_definitions_export_independent_schema_copies() -> None:
+    registry = ToolRegistry([make_add_tool()])
+    definitions = registry.model_definitions()
+
+    assert definitions == (
+        {
+            "name": "add_numbers",
+            "description": "Add two integers.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "left": {"type": "integer"},
+                    "right": {"type": "integer"},
+                },
+                "required": ["left", "right"],
+                "additionalProperties": False,
+            },
+        },
+    )
+    definitions[0]["input_schema"]["required"].append("mutated")  # type: ignore[index,union-attr]
+    assert registry.model_definitions()[0]["input_schema"]["required"] == [
+        "left",
+        "right",
+    ]  # type: ignore[index]

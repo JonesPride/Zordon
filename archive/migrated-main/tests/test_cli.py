@@ -1,82 +1,97 @@
 from collections.abc import Iterator, Sequence
 from io import StringIO
 
-import pytest
-
 from zordon.agent import Agent
 from zordon.cli import run
-from zordon.messages import ModelItem
-from zordon.providers.base import (
-    ProviderError,
-    ProviderEvent,
-    ResponseCompleted,
-    TextDelta,
-)
-from zordon.tools import Tool
+from zordon.messages import Message
+from zordon.providers.base import ProviderError
 
 
 class ChunkProvider:
     def __init__(self) -> None:
         self.calls = 0
 
-    def stream_response(
-        self,
-        system_prompt: str,
-        items: Sequence[ModelItem],
-        tools: Sequence[Tool],
-        max_output_tokens: int = 2048,
-    ) -> Iterator[ProviderEvent]:
-        del system_prompt, items, tools, max_output_tokens
+    def stream_reply(
+        self, system_prompt: str, messages: Sequence[Message], max_output_tokens: int
+    ) -> Iterator[str]:
+        del system_prompt, messages, max_output_tokens
         self.calls += 1
-        yield TextDelta("Calm")
-        yield TextDelta(" response")
-        yield ResponseCompleted()
+        yield "Calm"
+        yield " response"
 
 
 class FailThenRecoverProvider:
     def __init__(self) -> None:
         self.calls = 0
 
-    def stream_response(
-        self,
-        system_prompt: str,
-        items: Sequence[ModelItem],
-        tools: Sequence[Tool],
-        max_output_tokens: int = 2048,
-    ) -> Iterator[ProviderEvent]:
-        del system_prompt, items, tools, max_output_tokens
+    def stream_reply(
+        self, system_prompt: str, messages: Sequence[Message], max_output_tokens: int
+    ) -> Iterator[str]:
+        del system_prompt, messages, max_output_tokens
         self.calls += 1
         if self.calls == 1:
-            yield TextDelta("partial")
+            yield "partial"
             raise ProviderError("Connection interrupted.")
-        yield TextDelta("recovered")
-        yield ResponseCompleted()
+        yield "recovered"
 
 
 class InterruptedStreamProvider:
-    def stream_response(
-        self,
-        system_prompt: str,
-        items: Sequence[ModelItem],
-        tools: Sequence[Tool],
-        max_output_tokens: int = 2048,
-    ) -> Iterator[ProviderEvent]:
-        del system_prompt, items, tools, max_output_tokens
-        yield TextDelta("partial")
+    def stream_reply(
+        self, system_prompt: str, messages: Sequence[Message], max_output_tokens: int
+    ) -> Iterator[str]:
+        del system_prompt, messages, max_output_tokens
+        yield "partial"
         raise KeyboardInterrupt
 
 
 class IncompleteReplyProvider:
-    def stream_response(
-        self,
-        system_prompt: str,
-        items: Sequence[ModelItem],
-        tools: Sequence[Tool],
-        max_output_tokens: int = 2048,
-    ) -> Iterator[ProviderEvent]:
-        del system_prompt, items, tools, max_output_tokens
-        yield TextDelta("partial")
+    def stream_reply(
+        self, system_prompt: str, messages: Sequence[Message], max_output_tokens: int
+    ) -> Iterator[str]:
+        del system_prompt, messages, max_output_tokens
+        yield "partial"
         raise ProviderError("The model response ended before response.completed.")
+
+
+class FakeCommand:
+    handled = True
+    output = "Zordon doctor: ok"
+    should_exit = False
+
+
+class FakeUnhandledCommand:
+    handled = False
+    output = ""
+    should_exit = False
+
+
+class FakeRouter:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def handle(self, user_text: str) -> FakeCommand:
+        self.calls.append(user_text)
+        return FakeCommand()
+
+
+class FakeUnhandledRouter:
+    def handle(self, user_text: str) -> FakeUnhandledCommand:
+        del user_text
+        return FakeUnhandledCommand()
+
+
+class FullAgent:
+    def __init__(self) -> None:
+        self.respond_calls: list[str] = []
+
+    def respond(self, user_text: str) -> Iterator[str]:
+        self.respond_calls.append(user_text)
+        yield "Full"
+        yield " response"
+
+    def stream_turn(self, user_text: str) -> Iterator[str]:
+        del user_text
+        raise AssertionError("full agent should use respond()")
 
 
 class RecordingOutput(StringIO):
@@ -102,15 +117,6 @@ class InterruptOnceOutput(RecordingOutput):
         return super().write(text)
 
 
-class FakeApplication:
-    def __init__(self, agent: Agent) -> None:
-        self.agent = agent
-        self.close_calls = 0
-
-    def close(self) -> None:
-        self.close_calls += 1
-
-
 def inputs(*values: str):
     iterator = iter(values)
 
@@ -119,57 +125,6 @@ def inputs(*values: str):
         return next(iterator)
 
     return read
-
-
-@pytest.mark.parametrize("ending", ["/exit", "exit", "quit"])
-def test_cli_always_closes_application_after_exit(ending: str) -> None:
-    app = FakeApplication(Agent(ChunkProvider()))
-
-    assert run(app, input_fn=inputs(ending), output=RecordingOutput()) == 0
-    assert app.close_calls == 1
-
-
-def test_cli_closes_application_after_eof() -> None:
-    app = FakeApplication(Agent(ChunkProvider()))
-
-    def eof(prompt: str) -> str:
-        del prompt
-        raise EOFError
-
-    assert run(app, input_fn=eof, output=RecordingOutput()) == 0
-    assert app.close_calls == 1
-
-
-def test_cli_closes_application_after_keyboard_interrupt() -> None:
-    app = FakeApplication(Agent(ChunkProvider()))
-
-    def interrupt(prompt: str) -> str:
-        del prompt
-        raise KeyboardInterrupt
-
-    assert run(app, input_fn=interrupt, output=RecordingOutput()) == 0
-    assert app.close_calls == 1
-
-
-def test_cli_closes_after_provider_failure_then_exit() -> None:
-    app = FakeApplication(Agent(IncompleteReplyProvider()))
-
-    assert run(app, input_fn=inputs("hello", "exit"), output=RecordingOutput()) == 0
-    assert app.close_calls == 1
-
-
-def test_cli_closes_application_when_output_fails() -> None:
-    app = FakeApplication(Agent(ChunkProvider()))
-
-    class BrokenOutput(RecordingOutput):
-        def write(self, text: str) -> int:
-            del text
-            raise OSError("terminal unavailable")
-
-    with pytest.raises(OSError, match="terminal unavailable"):
-        run(app, output=BrokenOutput())
-
-    assert app.close_calls == 1
 
 
 def test_cli_ignores_blank_input_streams_chunks_and_exits() -> None:
@@ -189,6 +144,40 @@ def test_cli_ignores_blank_input_streams_chunks_and_exits() -> None:
     assert "Zordon: Calm response" in rendered
     assert "Zordon offline" in rendered
     assert output.flush_count >= 3
+
+
+def test_cli_handles_local_command_without_calling_provider() -> None:
+    provider = ChunkProvider()
+    router = FakeRouter()
+    output = RecordingOutput()
+
+    exit_code = run(
+        Agent(provider),
+        input_fn=inputs("/doctor", "/exit"),
+        output=output,
+        router=router,
+    )
+
+    assert exit_code == 0
+    assert provider.calls == 0
+    assert router.calls == ["/doctor"]
+    assert "Zordon: Zordon doctor: ok" in output.getvalue()
+
+
+def test_cli_uses_full_agent_respond_after_router_miss() -> None:
+    agent = FullAgent()
+    output = RecordingOutput()
+
+    exit_code = run(
+        agent,
+        input_fn=inputs("Write the first draft", "/exit"),
+        output=output,
+        router=FakeUnhandledRouter(),
+    )
+
+    assert exit_code == 0
+    assert agent.respond_calls == ["Write the first draft"]
+    assert "Zordon: Full response" in output.getvalue()
 
 
 def test_cli_labels_partial_failure_and_accepts_the_next_turn() -> None:

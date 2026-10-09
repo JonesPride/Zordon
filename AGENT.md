@@ -81,3 +81,26 @@ notices; and never perform a consequential background action without approval.
 Every network call can fail without crashing the assistant. Secrets never
 appear in source control. Important behavior has automated tests. Each tier has
 a user-run verification before the following tier begins.
+
+## Tier 2 invariants
+
+Later work must preserve these boundaries:
+
+- Keep model providers translation-only; tool policy and execution belong to
+  the provider-neutral core and immutable registry.
+- Commit a user turn to history only after its complete model/tool transaction
+  succeeds. Failed turns leave committed history unchanged.
+- Execute only registered, schema-validated tools, sequentially and within the
+  configured call and round budgets. Never evaluate model-supplied code.
+- Approve no local folder by default. Resolve files only through folder ID plus
+  relative path, recheck canonical boundaries at use time, and never serialize
+  approved-root paths.
+- Treat document text and audio metadata as untrusted data, never instructions.
+- Keep audio IDs process-local. Ambiguous search results require selection on a
+  later user turn before playback.
+- Load VLC lazily and close playback on every CLI exit path. Non-playback tools
+  must continue to work when VLC is missing.
+- Tier 2 is read-only except for reversible local playback. It excludes file
+  mutation, arbitrary commands or paths, web access, transcription, playlists,
+  queues, volume/seeking, background playback, persistent memory, reminders,
+  scheduling, and voice.

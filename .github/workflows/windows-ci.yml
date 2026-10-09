@@ -31,7 +31,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: tier-1-coverage
+          name: tier-2-coverage
           path: coverage.xml
           if-no-files-found: error
       - name: Lint
@@ -43,4 +43,4 @@ jobs:
       - name: Compile and import
         run: |
           python -m compileall -q src tests
-          python -c "from zordon.cli import main; print('Zordon import OK')"
+          python -c "from zordon.application import build_application; from zordon.tools.registry import ToolRegistry; from zordon.cli import main; print('Zordon Tier 2 imports OK')"
