@@ -51,7 +51,8 @@ Environment: Linux, Python 3.12.14, isolated virtual environment.
 Locked runtime/development dependencies installed successfully. Editable
 installation succeeded using normal build isolation.
 
-- [x] Pytest: 268 passed; 93% combined line/branch coverage.
+- [x] Initial Pytest: 268 passed; 93% combined line/branch coverage.
+- [x] Rooted-path fix Pytest: 271 passed; 93% combined coverage.
 - [x] Pyright: 0 errors, 0 warnings.
 - [x] Source and active test compilation.
 - [x] Ruff lint and format checks.
@@ -59,7 +60,10 @@ installation succeeded using normal build isolation.
 - [x] Archived baseline bytes match the pinned main source/tests/setup files.
 - [x] Built wheel contains only active zordon modules, no archived code.
 
-The Windows CI workflow is prepared locally but has not run for these changes.
+The first published run (37885842388) passed installation and 267 tests but
+failed the rooted-path test on Windows. The validator now rejects Windows roots
+without requiring a drive letter; regression tests also exercise Windows path
+semantics on Linux. The follow-up Windows run is the acceptance gate.
 Tests in the inactive archive are intentionally excluded; they describe the
 retired runtime and are not evidence for the active application.
 

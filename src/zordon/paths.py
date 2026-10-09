@@ -155,6 +155,7 @@ def _validate_relative_path(relative_path: str) -> str:
         native.is_absolute()
         or windows.is_absolute()
         or windows.drive
+        or windows.root
         or any(part == ".." for part in native.parts)
         or any(part == ".." for part in windows.parts)
     ):

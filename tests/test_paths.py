@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
@@ -41,6 +41,7 @@ def test_resolve_file_returns_safe_identity(
         "../secret.txt",
         "sub/../secret.txt",
         "/etc/passwd",
+        "\\secret.txt",
         "C:\\secret.txt",
         "C:secret.txt",
         "\\\\server\\share\\file.txt",
@@ -54,6 +55,18 @@ def test_resolve_file_rejects_unsafe_path(
     with pytest.raises(ApprovedFolderError) as error:
         folders.resolve_file("notes", relative_path)
 
+    assert error.value.code == "path_outside_approved_folder"
+
+
+@pytest.mark.parametrize("relative_path", ["/etc/passwd", "\\secret.txt"])
+def test_rejects_drive_rooted_paths_with_windows_native_path_semantics(
+    approved: tuple[ApprovedFolders, Path], monkeypatch, relative_path: str
+) -> None:
+    # Exercise Windows lexical semantics even when the test host is Linux.
+    monkeypatch.setattr("zordon.paths.PurePath", PureWindowsPath)
+    folders, _ = approved
+    with pytest.raises(ApprovedFolderError) as error:
+        folders.resolve_file("notes", relative_path)
     assert error.value.code == "path_outside_approved_folder"
 
 
