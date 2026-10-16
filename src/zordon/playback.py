@@ -67,6 +67,10 @@ class PlaybackController:
         try:
             backend.play(resolved.path)
         except Exception:  # noqa: BLE001 - backend details are private
+            # A backend may have partially started before raising. Stop it to
+            # avoid orphaned audio, without exposing private backend details.
+            with suppress(Exception):
+                backend.stop()
             self._state = "stopped"
             self._current = None
             return _failed()
