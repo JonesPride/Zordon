@@ -316,3 +316,16 @@ def test_vlc_play_minus_one_is_a_backend_failure(
 
     with pytest.raises(RuntimeError):
         backend.play(Path("song.mp3"))
+
+
+def test_failed_play_attempt_stops_partially_started_backend(tmp_path: Path) -> None:
+    catalog, _ = make_catalog(tmp_path, ("Track.mp3",))
+    audio_id = search_id(catalog, "track", 1)
+    backend = RecordingBackend(fail="play")
+    controller = PlaybackController(catalog, backend_factory=lambda: backend)
+
+    result = controller.play(audio_id, turn_number=1)
+
+    assert result.code == "playback_failed"
+    assert [call[0] for call in backend.calls] == ["play", "stop"]
+    assert controller.now_playing().data == {"state": "stopped"}
