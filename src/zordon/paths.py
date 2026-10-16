@@ -112,7 +112,7 @@ class ApprovedFolders:
                 raise ApprovedFolderError(
                     "folder_not_approved", f"Folder '{folder_id}' is not approved."
                 ) from exc
-        selected.sort(key=lambda item: item[0].casefold())
+        selected = sorted(set(selected), key=lambda item: item[0].casefold())
         allowed_suffixes = {suffix.casefold() for suffix in suffixes}
         found: list[ResolvedFile] = []
 
@@ -149,6 +149,10 @@ def _validate_relative_path(relative_path: str) -> str:
             "path_outside_approved_folder", "The requested path must be relative."
         )
     value = relative_path.strip()
+    if any(ord(character) < 32 for character in value):
+        raise ApprovedFolderError(
+            "path_outside_approved_folder", "The requested path contains invalid characters."
+        )
     native = PurePath(value)
     windows = PureWindowsPath(value)
     if (
