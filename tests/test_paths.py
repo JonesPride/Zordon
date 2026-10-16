@@ -160,3 +160,23 @@ def test_iter_files_enforces_limit_and_validates_folders(
     assert unknown.value.code == "folder_not_approved"
     with pytest.raises(ValueError, match="positive"):
         folders.iter_files(["notes"], {".txt"}, limit=0)
+
+
+@pytest.mark.parametrize("relative_path", ["note\\x00.txt", "note\\n.txt", "note\\r.txt"])
+def test_rejects_control_characters(
+    approved: tuple[ApprovedFolders, Path], relative_path: str
+) -> None:
+    folders, _ = approved
+    with pytest.raises(ApprovedFolderError) as error:
+        folders.resolve_file("notes", relative_path)
+    assert error.value.code == "path_outside_approved_folder"
+
+
+def test_duplicate_folder_selection_does_not_duplicate_scan_results(
+    approved: tuple[ApprovedFolders, Path],
+) -> None:
+    folders, root = approved
+    (root / "note.txt").write_text("safe")
+    found = folders.iter_files(["notes", "NOTES"], [".txt"], limit=10)
+    assert len(found) == 1
+    assert found[0].relative_path == "note.txt"
