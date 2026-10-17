@@ -515,3 +515,33 @@ def test_maps_sdk_exceptions_to_safe_provider_errors(
         list(provider.stream_response("System", [], []))
 
     assert error.value.__cause__ is sdk_error
+
+
+def test_strict_schema_translation_is_repeatable_without_mutating_tool() -> None:
+    tool = Tool(
+        "search",
+        "Search with optional limit.",
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "limit": {"type": "integer", "enum": [1, 2]},
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        lambda arguments, context: ToolResult.success("unused"),
+    )
+    provider, responses = make_provider([event("response.completed")])
+    list(provider.stream_response("System", [], [tool]))
+    list(provider.stream_response("System", [], [tool]))
+
+    first = responses.calls[0]["tools"][0]["parameters"]
+    second = responses.calls[1]["tools"][0]["parameters"]
+    assert first == second
+    assert first["required"] == ["query", "limit"]
+    assert first["properties"]["limit"]["enum"] == [1, 2, None]
+    assert tool.input_schema["required"] == ["query"]
+    assert tool.input_schema["properties"]["limit"] == {
+        "type": "integer", "enum": [1, 2]
+    }
