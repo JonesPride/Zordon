@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
@@ -187,7 +188,7 @@ def _map_item(item: ModelItem) -> dict[str, object]:
 
 
 def _map_tool(tool: Tool) -> dict[str, object]:
-    parameters = tool.input_schema
+    parameters = deepcopy(tool.input_schema)
     required = set(parameters.get("required", []))
     # Strict Responses schemas require every property; null denotes omission.
     for name, property_schema in parameters["properties"].items():
