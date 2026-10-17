@@ -162,7 +162,7 @@ def test_iter_files_enforces_limit_and_validates_folders(
         folders.iter_files(["notes"], {".txt"}, limit=0)
 
 
-@pytest.mark.parametrize("relative_path", ["note\\x00.txt", "note\\n.txt", "note\\r.txt"])
+@pytest.mark.parametrize("relative_path", ["note" + chr(code) + ".txt" for code in (0, 10, 13)])
 def test_rejects_control_characters(
     approved: tuple[ApprovedFolders, Path], relative_path: str
 ) -> None:
